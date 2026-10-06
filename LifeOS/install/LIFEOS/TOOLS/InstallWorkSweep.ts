@@ -18,13 +18,18 @@
  *     Needs `loginctl enable-linger` to survive logout — the same requirement
  *     PULSE/manage.sh documents for com.lifeos.pulse.
  *
- * The darwin path is unchanged: linux support is a second branch beside it, not
- * a replacement. Both are idempotent — install tears down the prior unit first.
+ *   win32: registers a current-user Task Scheduler task via lib/SchtasksUser.ts
+ *     (no admin rights). Runs while the user is logged on; a run missed during
+ *     sleep fires once on wake.
+ *
+ * The darwin path is unchanged: linux and win32 support are branches beside it,
+ * not replacements. All are idempotent — install tears down the prior unit first.
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
 import { join } from "path";
 import { homedir } from "node:os";
+import * as schtasks from "./lib/SchtasksUser";
 
 declare const Bun: { spawn: (cmd: string[], opts?: any) => any };
 
@@ -204,8 +209,38 @@ async function statusLinux(): Promise<void> {
   if (!r.ok) process.exit(1);
 }
 
+/* ── Windows Task Scheduler backend (win32 only) ────────────────────────────
+ * Strictly additive. The launchd and systemd paths above are unchanged; on
+ * darwin and linux nothing in this section executes. Same job as the plist:
+ * WorkSweep.ts hourly, first run shortly after install, catch-up after sleep,
+ * logging to the same file. Translation rules live in lib/SchtasksUser.ts.
+ * ------------------------------------------------------------------------- */
+
+async function windowsSpec(): Promise<schtasks.UnitSpec> {
+  const bunPath = await schtasks.which("bun");
+  if (!bunPath) throw new Error("bun not found in PATH - install bun first");
+  return {
+    label: LABEL,
+    description: "LifeOS Work Sweep — periodic Work System capture (session catch-up, stale flagging, project checks, TELOS goals)",
+    exec: [bunPath, join(HOME, ".claude", "LIFEOS", "TOOLS", "WorkSweep.ts")],
+    logPath: join(HOME, ".claude", "LIFEOS", "MEMORY", "STATE", "com.lifeos.worksweep.log"),
+    workingDirectory: join(HOME, ".claude"),
+    environment: { HOME },
+    schedule: { kind: "interval", seconds: 3600 },
+  };
+}
+
+async function windowsMain(arg: string | undefined): Promise<void> {
+  const spec = await windowsSpec();
+  const log = (m: string) => console.log(`[InstallWorkSweep] ${m}`);
+  if (arg === "--uninstall") { await schtasks.uninstall(spec, log); return; }
+  if (arg === "--status") { if (!(await schtasks.status(spec, log))) process.exit(1); return; }
+  if (!(await schtasks.install(spec, log))) process.exit(1);
+}
+
 async function main(): Promise<void> {
   const arg = process.argv[2];
+  if (schtasks.isWindows()) return windowsMain(arg);
   if (arg === "--uninstall") return IS_LINUX ? uninstallLinux() : uninstall();
   if (arg === "--status") return IS_LINUX ? statusLinux() : status();
   return IS_LINUX ? installLinux() : install();
