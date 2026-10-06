@@ -131,7 +131,7 @@ LifeOS installs in **two layers**, and you present them that way.
 | **Pulse** | the Life Dashboard — menu-bar app + `launchd` service on `:31337` | optional |
 | **worksweep / derivedsync** | background `launchd` jobs (work capture, derived-file sync) | optional |
 
-Pulse, worksweep, and derivedsync install as **launchd** agents on macOS and as **systemd --user** units on Linux — their installers dispatch on platform, so offer them on both (Windows has neither: skip cleanly there). The macOS menu-bar app is genuinely macOS-only. Show your human this menu, take their picks, and deploy only those. The **Setup** workflow (step 9) drives the actual deployment of the chosen set and verifies each with real evidence (e.g. Pulse → `curl :31337/healthz` = 200). Everything ships in the payload; nothing activates without its matching yes.
+Pulse, worksweep, and derivedsync install as **launchd** agents on macOS and as **systemd --user** units on Linux — their installers dispatch on platform, so offer them on both (Windows has neither: Pulse registers a Task Scheduler task via `PULSE/manage.ps1`, and worksweep a Task Scheduler task via `lib/SchtasksUser.ts`; derivedsync is not ported yet, so skip it cleanly there). The macOS menu-bar app is genuinely macOS-only. Show your human this menu, take their picks, and deploy only those. The **Setup** workflow (step 9) drives the actual deployment of the chosen set and verifies each with real evidence (e.g. Pulse → `curl :31337/healthz` = 200). Everything ships in the payload; nothing activates without its matching yes.
 
 ### 8.5 Capability check — probe what doctrine assumes (Doctor)
 

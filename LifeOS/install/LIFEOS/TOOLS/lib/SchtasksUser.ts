@@ -60,9 +60,16 @@ export type { Schedule, UnitSpec };
 declare const Bun: { spawn: (cmd: string[], opts?: any) => any };
 
 const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir();
-const LOCAL_APP_DATA = process.env.LOCALAPPDATA ?? join(HOME, "AppData", "Local");
-/** Where each task's XML and runner JSON live. Per-user, no admin needed. */
-export const TASK_DIR = join(LOCAL_APP_DATA, "LifeOS", "schtasks");
+/**
+ * Where each task's XML and runner JSON live: beside the job logs, in the
+ * LifeOS state tree under the user profile. NOT under %LOCALAPPDATA%: when
+ * the installer is driven from an MSIX-packaged app (the Claude desktop app
+ * is one), Windows silently redirects that app's writes to AppData into its
+ * private Packages\<app>\LocalCache folder. Task Scheduler runs outside the
+ * package, cannot see the redirected file, and the task fails with nothing
+ * in any log. The user-profile root is not virtualized.
+ */
+export const TASK_DIR = join(HOME, ".claude", "LIFEOS", "MEMORY", "STATE", "schtasks");
 /** The wrapper every task runs; sits beside this file in TOOLS/lib. */
 export const RUNNER = join(dirname(fileURLToPath(import.meta.url)), "TaskRunner.ts");
 
@@ -334,6 +341,32 @@ function taskFiles(label: string): { xml: string; json: string } {
   return { xml: join(TASK_DIR, `${label}.xml`), json: join(TASK_DIR, `${label}.json`) };
 }
 
+/**
+ * End the task AND the runner it started. `schtasks /End` only terminates the
+ * task's own process (conhost); the bun TaskRunner beneath it survives as an
+ * orphan, which for a resident watcher means it keeps running after uninstall.
+ * Every runner's command line carries its task's unique JSON path, so match
+ * on that. Single quotes are doubled for the PowerShell string literal.
+ */
+async function stopTask(label: string): Promise<void> {
+  await schtasks(["/End", "/TN", label]);
+  const needle = taskFiles(label).json.replace(/'/g, "''");
+  await sh([
+    "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+    `Get-CimInstance Win32_Process | ` +
+      `Where-Object { $_.Name -eq 'bun.exe' -and $_.CommandLine -and $_.CommandLine.Contains('${needle}') } | ` +
+      `ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
+  ]);
+}
+
+/** Task Scheduler's informational result codes, which are not failures. */
+function describeResult(code: number): string {
+  if (code === 0x41301) return "currently running";
+  if (code === 0x41303) return "has not run yet";
+  if (code === 0) return "success";
+  return `failed, 0x${code.toString(16).toUpperCase()}`;
+}
+
 /* ── Public operations ──────────────────────────────────────────────────── */
 
 /**
@@ -364,7 +397,7 @@ export async function install(spec: UnitSpec, log: (m: string) => void): Promise
   if (spec.errLogPath) mkdirSync(dirname(spec.errLogPath), { recursive: true });
 
   const files = taskFiles(spec.label);
-  if (isResident(spec.schedule)) await schtasks(["/End", "/TN", spec.label]);
+  if (isResident(spec.schedule)) await stopTask(spec.label);
 
   writeFileSync(files.json, JSON.stringify(runnerSpec(spec), null, 2) + "\n");
   log(`wrote ${files.json}`);
@@ -388,7 +421,7 @@ export async function install(spec: UnitSpec, log: (m: string) => void): Promise
 /** End and delete the task, and remove every file this spec created. */
 export async function uninstall(spec: UnitSpec, log: (m: string) => void): Promise<boolean> {
   const files = taskFiles(spec.label);
-  await schtasks(["/End", "/TN", spec.label]);
+  await stopTask(spec.label);
   const del = await schtasks(["/Delete", "/TN", spec.label, "/F"]);
   if (del.ok) log(`scheduled task deleted — ${spec.label}`);
   else log(`no scheduled task named ${spec.label} — nothing to delete`);
@@ -415,7 +448,8 @@ export async function status(spec: UnitSpec, log: (m: string) => void): Promise<
     `$i = Get-ScheduledTaskInfo -TaskName '${spec.label}'`,
     "$f = { param($d) if ($d -and $d.Year -gt 1999) { $d.ToString('yyyy-MM-dd HH:mm') } else { 'never' } }",
     "\"state: $($t.State)\"",
-    "\"last run: $(& $f $i.LastRunTime) (result 0x$('{0:X}' -f $i.LastTaskResult))\"",
+    "\"last run: $(& $f $i.LastRunTime)\"",
+    "\"result: $($i.LastTaskResult)\"",
     "\"next run: $(& $f $i.NextRunTime)\"",
   ].join("; ");
   const r = await sh(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps]);
@@ -423,7 +457,10 @@ export async function status(spec: UnitSpec, log: (m: string) => void): Promise<
     log(`not installed (no scheduled task named ${spec.label})`);
     return false;
   }
-  for (const line of r.out.split(/\r?\n/).filter(Boolean)) log(line.trim());
+  for (const line of r.out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)) {
+    const m = line.match(/^result: (\d+)$/);
+    log(m ? `last result: ${describeResult(Number(m[1]))}` : line);
+  }
   log(`log: ${spec.logPath}`);
   return true;
 }
