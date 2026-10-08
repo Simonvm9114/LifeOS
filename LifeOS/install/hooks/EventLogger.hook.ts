@@ -248,6 +248,7 @@ function handlePostToolUse(raw: string): void {
         // its state file, and `due` stayed true on every single tool call.
         // (ported from public PR #1738, @elhoim)
         const proc = spawn(resolveBun(), [paiPath('TOOLS', 'WorkReconcile.ts')], {
+          windowsHide: true, // no console window per child on Windows (hooks run with no console)
           detached: true,
           stdio: 'ignore',
         });

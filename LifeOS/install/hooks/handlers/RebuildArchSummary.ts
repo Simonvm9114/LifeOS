@@ -117,7 +117,7 @@ const REBUILD_TIMEOUT_MS = 8000;
 
 async function rebuild(generator: string, cwd: string): Promise<void> {
   return new Promise((resolve) => {
-    const proc = spawn("bun", [generator, "generate"], { cwd, stdio: "pipe" });
+    const proc = spawn("bun", [generator, "generate"], { windowsHide: true, cwd, stdio: "pipe" });
 
     let stderr = "";
     let settled = false;

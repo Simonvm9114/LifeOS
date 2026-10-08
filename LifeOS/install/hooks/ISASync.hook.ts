@@ -185,6 +185,7 @@ async function main(): Promise<string | null> {
     try {
       const isaRender = join(homedir(), '.claude/LIFEOS/TOOLS/ISARender.ts');
       const proc = spawn('bun', [isaRender, isaPath], {
+        windowsHide: true, // no console window per child on Windows (hooks run with no console)
         detached: true,
         stdio: 'ignore',
       });
