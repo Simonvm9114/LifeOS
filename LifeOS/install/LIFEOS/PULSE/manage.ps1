@@ -1,11 +1,11 @@
-# LifeOS Pulse — Windows process management.
+# LifeOS Pulse - Windows process management.
 # Usage: powershell -ExecutionPolicy Bypass -File manage.ps1 {start|stop|restart|status|install|uninstall}
 #
 # Ported from public issue #1733, @umair-a11y.
 # Verified on Windows by @umair-a11y: install + PulseStart + PATH fix. The
 # uninstall/start/stop/restart/status verbs are an unverified adaptation of
-# manage.sh — needs a Windows pass before reliance.
-# Windows-only — manage.sh remains the macOS (launchd) and Linux (systemd) path.
+# manage.sh - needs a Windows pass before reliance.
+# Windows-only - manage.sh remains the macOS (launchd) and Linux (systemd) path.
 #
 # Registers a CURRENT-USER scheduled task: no admin rights, no machine-wide state.
 
@@ -20,7 +20,7 @@ $pulseUrl = "http://localhost:31337/"
 
 function Test-PulseUp {
     try {
-        $probe = Invoke-WebRequest -Uri $pulseUrl -UseBasicParsing -TimeoutSec 2
+        $probe = Invoke-WebRequest -Uri $pulseUrl -UseBasicParsing -TimeoutSec 8
         return $probe.StatusCode -eq 200
     } catch { return $false }
 }
@@ -33,7 +33,7 @@ function Get-PulseProcess {
 switch ($Command.ToLower()) {
     "install" {
         if (-not (Test-Path $startScript)) { Write-Error "missing $startScript"; exit 1 }
-        # NOTE: do not rename this to $Action — PowerShell variables are
+        # NOTE: do not rename this to $Action - PowerShell variables are
         # case-insensitive, so it would collide with a param named $Action and
         # Register-ScheduledTask would be handed the string instead of the action.
         $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" `

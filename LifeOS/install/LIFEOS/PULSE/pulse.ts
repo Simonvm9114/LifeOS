@@ -629,7 +629,10 @@ async function main() {
   // an orphaned hand-launched pulse fought the launchd one for hours).
   // Refuse to boot instead.
   try {
-    const oldPid = parseInt((await Bun.file(PID_PATH).text()).trim(), 10)
+    // Check existence first: on Windows, awaiting Bun.file().text() on a missing
+    // file can hang without settling, and with nothing else holding the event
+    // loop main() then exits 0 silently on every first boot (public issue #2223).
+    const oldPid = existsSync(PID_PATH) ? parseInt(readFileSync(PID_PATH, "utf8").trim(), 10) : NaN
     if (oldPid && oldPid !== process.pid) {
       process.kill(oldPid, 0) // throws if oldPid is dead → guard passes
       const cmd = new TextDecoder()
