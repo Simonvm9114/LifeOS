@@ -39,6 +39,7 @@ for (const __k of ["LIFEOS_DIR", "LIFEOS_CONFIG_DIR", "PROJECTS_DIR"]) {
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { firstBannedHit } from "./lib/banned-vocab";
+import { closerPattern, getCloserEmoji } from "./lib/identity";
 import { homedir } from "node:os";
 
 // Normalize env path vars that Claude Code injects without shell expansion (LifeOS#1404)
@@ -179,7 +180,7 @@ function measure(text: string): FormatMeasure {
     lines: prose.split("\n").filter((l) => l.trim().length > 0).length,
     emDashes: countEmDashes(prose),
     banner: MODE_BANNERS.some((banner) => text.includes(banner)),
-    closer: /🗣️/.test(text),
+    closer: new RegExp(closerPattern()).test(text),
     banned: firstBannedHit(text),
   };
 }
@@ -207,7 +208,7 @@ function contractLine(cap: number | null, last: FormatMeasure | null): string {
   const budget = cap === null
     ? "depth requested, line cap lifted"
     : `max ${cap} prose lines`;
-  const structure = "banner first, 🗣️ closer last, max 2 em-dashes";
+  const structure = `banner first, ${getCloserEmoji()} closer last, max 2 em-dashes`;
   const previous = last
     ? (() => {
         const broke = breaksIn(last, cap);

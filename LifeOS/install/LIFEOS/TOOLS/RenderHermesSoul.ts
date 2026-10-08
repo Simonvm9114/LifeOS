@@ -32,7 +32,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { getDAName, getIdentity, getPrincipalName } from "../../hooks/lib/identity";
+import { closerPattern, getDAName, getIdentity, getPrincipalName } from "../../hooks/lib/identity";
 
 const HOME = homedir();
 const HERMES_HOME = process.env.HERMES_HOME || join(HOME, ".hermes");
@@ -183,7 +183,7 @@ function scrubPaths(text: string): string {
  * The terminal output contract must never reach the soul (claim C9).
  * These are the markers that would drag the CLI format into a chat bubble.
  */
-const FORMAT_CONTRACT = [/════+\s*LifeOS/, /🗣️/, /🔧\s*CHANGE/, /✅\s*VERIFY/, /🧠\s*MEMORY/, /🩺/];
+const FORMAT_CONTRACT = [/════+\s*LifeOS/, new RegExp(closerPattern()), /🔧\s*CHANGE/, /✅\s*VERIFY/, /🧠\s*MEMORY/, /🩺/];
 
 /**
  * Strip the CLI format contract out of harvested text while KEEPING the prose.
@@ -198,8 +198,8 @@ function stripFormatContract(text: string): string {
     .split("\n")
     .filter((l) => !/════+/.test(l))
     .filter((l) => !/^\s*(?:🔧\s*CHANGE|✅\s*VERIFY|🧠\s*MEMORY|🩺[^:]*)\s*:/.test(l))
-    .map((l) => l.replace(/🗣️\s*<?[A-Za-z]*>?\s*:\s*/g, ""))
-    .map((l) => l.replace(/🗣️|🩺/g, ""))
+    .map((l) => l.replace(new RegExp(`${closerPattern()}\\s*<?[A-Za-z]*>?\\s*:\\s*`, "g"), ""))
+    .map((l) => l.replace(new RegExp(`${closerPattern()}|🩺`, "g"), ""))
     .join("\n");
 }
 

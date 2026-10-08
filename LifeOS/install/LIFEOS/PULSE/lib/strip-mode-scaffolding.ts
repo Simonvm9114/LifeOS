@@ -26,6 +26,8 @@
  * happy path under Layer 1) the function is a no-op.
  */
 
+import { closerPattern } from "../../../hooks/lib/identity";
+
 // Regex set — each pattern strips one class of scaffolding.
 // Lines that match BANNER/PHASE_HEADER/BARE_MODE_LABEL are removed entirely.
 // Lines that match FIELD_PREFIX/VOICE_PREFIX have only the prefix removed
@@ -35,7 +37,7 @@ const BANNER_LINE = /^[ \t]*═══[\s\S]*?═══[ \t]*$/gm;
 const PHASE_HEADER_LINE = /^[ \t]*━━━[^\n]*?━━━[ \t]*\d+\s*\/\s*\d+[ \t]*$/gm;
 const BARE_MODE_LABEL_LINE = /^[ \t]*(MINIMAL|NATIVE|ALGORITHM)[ \t]*$/gm;
 const FIELD_PREFIX = /^[ \t]*(?:📃|🔧|✅|📋|🗒️|🔄|🖊️|🧠|👁️|📋|🔨|⚡|📚|🔁)\s*[A-Z][A-Z _]*?:[ \t]*/gm;
-const VOICE_PREFIX = /^[ \t]*🗣️\s+[A-Za-z][A-Za-z0-9_-]*:[ \t]*/gm;
+const VOICE_PREFIX = new RegExp(`^[ \\t]*${closerPattern()}\\s+[A-Za-z][A-Za-z0-9_-]*:[ \\t]*`, "gm");
 // Backwards-compatibility: some emissions show "MINIMAL\n\n" (banner-as-label).
 // Already handled by BARE_MODE_LABEL_LINE; multiline collapse below tidies the
 // resulting blank lines.

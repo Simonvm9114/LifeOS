@@ -61,6 +61,8 @@ export interface LifeosDa {
   fullName?: string;
   displayName?: string;
   color?: string;
+  /** Emoji that opens the DA's closing line. Unset: 🗣️ (see getCloserEmoji). */
+  closer?: string;
   voices: {
     main: LifeosVoiceSettings;
   };
@@ -182,6 +184,7 @@ function validateAndNormalize(raw: unknown, path: string): LifeosConfig {
       fullName: da.full_name ?? da.fullName,
       displayName: da.display_name ?? da.displayName,
       color: da.color,
+      closer: da.closer,
       voices: {
         main: normalizeVoice(daVoices.main),
       },
