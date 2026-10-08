@@ -46,8 +46,8 @@
  */
 
 import { spawn } from "child_process";
-import { appendFileSync, existsSync, mkdirSync, unlinkSync, writeFileSync } from "fs";
-import { join } from "path";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "fs";
+import { dirname, join } from "path";
 import { homedir, tmpdir } from "os";
 import { randomUUID } from "crypto";
 import { modelForEffort, pinnedModelForEffort, EFFORT_MODEL, UNIFORM_HARNESS_EFFORT, type EffortLevel, type HarnessEffort } from './models';
@@ -59,9 +59,35 @@ import { modelForEffort, pinnedModelForEffort, EFFORT_MODEL, UNIFORM_HARNESS_EFF
  */
 export function resolveClaudeBin(): string {  // exported for algorithm.ts (PR #1460, author asdf8675309)
   const fromPath = typeof Bun !== "undefined" ? Bun.which("claude") : null;
-  if (fromPath) return fromPath;
+  if (fromPath) return resolveWindowsShim(fromPath);
   const fallback = join(homedir(), ".local", "bin", "claude");
   return existsSync(fallback) ? fallback : "claude";
+}
+
+/**
+ * On Windows, npm installs the CLI as a `claude.cmd` shim. node:child_process
+ * refuses to spawn .cmd/.bat without `shell: true` (CVE-2024-27980) and throws
+ * EINVAL, so every inference call failed and the memory reviewer never completed
+ * a run (public issue #2057). A shell would route the argv-borne system prompt
+ * through cmd.exe, so stay shell-free: the shim only launches a real executable,
+ * so spawn that. Read the quoted .exe path the shim runs, expanding %dp0% to the
+ * shim's directory; fall back to the package's bin\claude.exe. Returns `bin`
+ * unchanged off Windows, for non-shims, or when no executable is found (a shim
+ * that runs `node cli.js` is not handled here).
+ */
+export function resolveWindowsShim(bin: string): string {
+  if (process.platform !== "win32" || !/\.(cmd|bat)$/i.test(bin)) return bin;
+  const dir = dirname(bin);
+  try {
+    for (const m of readFileSync(bin, "utf8").matchAll(/"([^"\r\n]*\.exe)"/gi)) {
+      const target = join(m[1].replace(/%~?dp0%?/gi, dir));
+      if (existsSync(target)) return target;
+    }
+  } catch {
+    // unreadable shim: fall through to the package layout
+  }
+  const pkgExe = join(dir, "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe");
+  return existsSync(pkgExe) ? pkgExe : bin;
 }
 
 /** The run levels — IS models.ts EffortLevel, not a copy of it. Declaring the
