@@ -227,6 +227,7 @@ function spawnReviewer(turnsReviewed: number, transcriptPath: string | null): { 
     const args = [REVIEWER_PATH, "review", "--turns", String(turnsReviewed)];
     if (transcriptPath && existsSync(transcriptPath)) args.push("--input", transcriptPath);
     const proc = spawn("bun", args, {
+      windowsHide: true, // no console window per child on Windows (hooks run with no console)
       env,
       stdio: "ignore",
       detached: true,

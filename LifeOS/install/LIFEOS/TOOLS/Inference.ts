@@ -299,6 +299,7 @@ async function inferenceAttempt(options: InferenceOptions, modelOverride?: strin
     let stderr = '';
 
     const proc = spawn(resolveClaudeBin(), args, {
+      windowsHide: true, // no console window per child on Windows (hooks run with no console)
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });

@@ -92,6 +92,7 @@ for (const isaPath of edited) {
   }
   try {
     const proc = spawn('bun', [ISA_RENDER, isaPath], {
+      windowsHide: true, // no console window per child on Windows (hooks run with no console)
       detached: true,
       stdio: 'ignore',
     });

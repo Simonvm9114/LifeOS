@@ -90,7 +90,7 @@ function main(): void {
 
     // Pass a short trigger label (basename) for the notification.
     const label = filePath.split('/').slice(-1)[0];
-    const proc = spawn('bun', [RUNNER, label], { env, stdio: 'ignore', detached: true });
+    const proc = spawn('bun', [RUNNER, label], { windowsHide: true, env, stdio: 'ignore', detached: true });
     proc.unref();
     saveLastFire(new Date().toISOString());
   } catch (e) {
