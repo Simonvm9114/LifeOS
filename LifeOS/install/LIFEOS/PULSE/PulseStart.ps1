@@ -1,4 +1,4 @@
-# LifeOS Pulse — Windows launcher (idempotent, hidden).
+# LifeOS Pulse - Windows launcher (idempotent, hidden).
 # Ported from public issue #1733, @umair-a11y (pattern verified on the
 # contributor's Windows 11 install; PATH fix from their follow-up comment).
 #
@@ -13,11 +13,11 @@ $bun = Join-Path $env:USERPROFILE ".bun\bin\bun.exe"
 # Already up? Task Scheduler retries on failure and the user may also start Pulse
 # by hand, so a second instance must not fight the first for :31337. Probe a
 # Pulse-SPECIFIC endpoint: /healthz returns a JSON body carrying a "status" field
-# (HTTP 200 healthy, 503 degraded — both mean Pulse already owns the port). A bare
+# (HTTP 200 healthy, 503 degraded - both mean Pulse already owns the port). A bare
 # 200 from some unrelated process that grabbed :31337 must NOT read as "Pulse up".
 function Test-PulseUp {
     try {
-        $r = Invoke-WebRequest -Uri "http://localhost:31337/healthz" -UseBasicParsing -TimeoutSec 2
+        $r = Invoke-WebRequest -Uri "http://localhost:31337/healthz" -UseBasicParsing -TimeoutSec 8
         return ($r.Content -match '"status"')
     } catch {
         # PowerShell throws on non-2xx; a 503-degraded Pulse still owns the port,
@@ -35,7 +35,7 @@ function Test-PulseUp {
 if (Test-PulseUp) { exit 0 }
 
 if (-not (Test-Path $bun)) {
-    Write-Error "bun not found at $bun — install bun, or edit this script's `$bun path."
+    Write-Error "bun not found at $bun - install bun, or edit this script's `$bun path."
     exit 1
 }
 
