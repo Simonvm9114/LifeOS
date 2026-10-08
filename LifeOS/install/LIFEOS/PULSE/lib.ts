@@ -544,7 +544,27 @@ export function isSentinel(output: string): boolean {
 // inherited PATH is sparse (observed on Linux when Pulse runs under a
 // minimal-env service manager). /bin/bash is the POSIX fallback — present on
 // macOS natively and on every mainstream Linux distro.
-const BASH_PATH = Bun.which("bash") ?? "/bin/bash"
+// On Windows, System32\bash.exe is WSL's launcher stub and sits ahead of Git's
+// bash on PATH, so jobs spawned through it ran inside WSL, where bun does not
+// exist, and failed on every tick (public issue #2225). Prefer Git for
+// Windows' bash.exe there; the check only runs on win32.
+function resolveBash(): string {
+  if (process.platform === "win32") {
+    const bases = [process.env.ProgramFiles, process.env["ProgramFiles(x86)"], process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, "Programs")]
+    for (const base of bases) {
+      if (!base) continue
+      const candidate = join(base, "Git", "bin", "bash.exe")
+      if (existsSync(candidate)) return candidate
+    }
+    const git = Bun.which("git") // e.g. <Git>\cmd\git.exe → <Git>\bin\bash.exe
+    if (git) {
+      const candidate = join(git, "..", "..", "bin", "bash.exe")
+      if (existsSync(candidate)) return candidate
+    }
+  }
+  return Bun.which("bash") ?? "/bin/bash"
+}
+const BASH_PATH = resolveBash()
 
 // Drain a child's pipes and await exit under a hard deadline (public issue
 // #1546, @jacobo-ortiz). A bare `await new Response(proc.stdout).text()` after
