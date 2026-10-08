@@ -36,6 +36,7 @@
  */
 
 import { readHookInput, parseTranscriptFromInput } from "./lib/hook-io";
+import { closerPattern, getCloserEmoji } from "./lib/identity";
 import { appendFileSync, existsSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 import { homedir } from "node:os";
@@ -73,7 +74,7 @@ function visibleLines(text: string): string[] {
 }
 
 const BANNER = /════\s*LifeOS/;
-const CLOSER = /🗣️/;
+const CLOSER = new RegExp(closerPattern());
 const MEMORY_LINE = /🧠\s*MEMORY\s*:/;
 const SYSTEM_LINE = /⚙️?\s*SYSTEM\s*:/;
 
@@ -122,7 +123,7 @@ export function checkFormat(
     return { code: "no-banner", detail: `first visible line is not the LifeOS banner: ${JSON.stringify(lines[0].slice(0, 48))}` };
   }
   if (!CLOSER.test(lines[lines.length - 1])) {
-    return { code: "no-closer", detail: "last visible line is not the 🗣️ closer" };
+    return { code: "no-closer", detail: `last visible line is not the ${getCloserEmoji()} closer` };
   }
   if (opts.memoryDelta && !MEMORY_LINE.test(message)) {
     return { code: "missing-memory-line", detail: "a memory-delta arrived this turn but no 🧠 MEMORY: line was rendered" };

@@ -26,6 +26,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { closerPattern } from "../../hooks/lib/identity";
 
 const HOME = homedir();
 /** LIFEOS/HERMES/ → LIFEOS/ */
@@ -129,8 +130,8 @@ function stripFormatContract(text: string): string {
     .split("\n")
     .filter((l) => !/════+/.test(l))
     .filter((l) => !/^\s*(?:🔧\s*CHANGE|✅\s*VERIFY|🧠\s*MEMORY|🩺[^:]*)\s*:/.test(l))
-    .map((l) => l.replace(/🗣️\s*<?[A-Za-z]*>?\s*:\s*/g, ""))
-    .map((l) => l.replace(/🗣️|🩺/g, ""))
+    .map((l) => l.replace(new RegExp(`${closerPattern()}\\s*<?[A-Za-z]*>?\\s*:\\s*`, "g"), ""))
+    .map((l) => l.replace(new RegExp(`${closerPattern()}|🩺`, "g"), ""))
     .join("\n");
 }
 

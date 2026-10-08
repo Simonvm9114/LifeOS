@@ -12,7 +12,7 @@
 
 import { setTabState, readTabState, stripPrefix, setAscentTab, isDegenerateDesc } from '../lib/tab-setter';
 import { isValidCompletionTitle, gerundToPastTense, getWorkingFallback, trimToValidTitle } from '../lib/output-validators';
-import { getDAName } from '../lib/identity';
+import { closerPattern, getDAName } from '../lib/identity';
 
 import type { ParsedTranscript } from '../../LIFEOS/TOOLS/TranscriptParser';
 
@@ -25,7 +25,7 @@ function extractTabTitle(voiceLine: string): string | null {
   if (!voiceLine || voiceLine.length < 3) return null;
 
   const cleaned = voiceLine
-    .replace(/^🗣️\s*/, '')
+    .replace(new RegExp(`^${closerPattern()}\\s*`), '')
     .replace(new RegExp(`^${getDAName()}:\\s*`, 'i'), '')
     .replace(/^(Done\.?\s*)/i, '')
     .trim();

@@ -30,7 +30,7 @@ import { appendFile, mkdir, rename } from "fs/promises"
 import { stripModeScaffolding, hasModeScaffolding } from "../lib/strip-mode-scaffolding"
 import { loadRemoteMcpServers, mcpStatusPromptLine } from "../lib/mcp-allowlist"
 import { homedir } from "node:os";
-import { getDAName } from "../../../hooks/lib/identity";
+import { getCloserEmoji, getDAName } from "../../../hooks/lib/identity";
 
 // BILLING: Strip ANTHROPIC_API_KEY and ANTHROPIC_AUTH_TOKEN before any SDK
 // query() call — both outrank OAuth in Anthropic's auth precedence chain.
@@ -190,7 +190,7 @@ This surface replaces the constitutional output format for this turn — the ban
 DO NOT emit ANY of these:
 - Box dividers: \`═══ LifeOS ═══════════════════════════\` or any \`═══\` line
 - Algorithm phase headers: \`━━━ 👁️ OBSERVE ━━━ 1/7\` and equivalents
-- Template field prefixes: \`📃 CONTENT:\`, \`🔧 CHANGE:\`, \`✅ VERIFY:\`, \`📋 SUMMARY:\`, \`🗒️ TASK:\`, \`🗣️ ${getDAName()}:\`
+- Template field prefixes: \`📃 CONTENT:\`, \`🔧 CHANGE:\`, \`✅ VERIFY:\`, \`📋 SUMMARY:\`, \`🗒️ TASK:\`, \`${getCloserEmoji()} ${getDAName()}:\`
 - Any other scaffolding from CLAUDE.md mode templates
 
 A belt-and-suspenders egress sanitizer (LIFEOS/PULSE/lib/strip-mode-scaffolding.ts) strips these markers if you emit them — but cleaner to never emit them.

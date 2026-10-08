@@ -22,6 +22,7 @@ name = "Aria"                      # required — your DA's name (rename to anyt
 full_name = ""
 display_name = ""
 color = "#3B82F6"
+# closer = "🦉"                    # optional: emoji that opens the closing line (default 🗣️)
 
 [da.voices.main]
 voice_id = "21m00Tcm4TlvDq8ikWAM"  # required — ElevenLabs voice_id (public default; set yours in Interview)
