@@ -113,9 +113,36 @@ export function loadOpenAiKey(): string | undefined {
  */
 export function resolveClaudeBin(): string {  // exported for algorithm.ts (PR #1460, author asdf8675309)
   const fromPath = typeof Bun !== "undefined" ? Bun.which("claude") : null;
-  if (fromPath) return fromPath;
+  if (fromPath) return resolveWindowsShim(fromPath);
   const fallback = join(homedir(), ".local", "bin", "claude");
   return existsSync(fallback) ? fallback : "claude";
+}
+
+/**
+ * On Windows, npm installs the CLI as a `claude.cmd` shim. node:child_process
+ * refuses to spawn .cmd/.bat without `shell: true` (CVE-2024-27980) and throws
+ * EINVAL, so every inference call failed and the memory reviewer never completed
+ * a run (public issue #2057). A shell would route the argv-borne system prompt
+ * through cmd.exe, so stay shell-free: the shim only launches a real executable,
+ * so spawn that. Read the quoted .exe path the shim runs, expanding %dp0% to the
+ * shim's directory; fall back to the package's bin\claude.exe. Returns `bin`
+ * unchanged off Windows, for non-shims, or when no executable is found (a shim
+ * that runs `node cli.js` is not handled here).
+ */
+export function resolveWindowsShim(bin: string): string {
+  if (process.platform !== "win32" || !/\.(cmd|bat)$/i.test(bin)) return bin;
+  const dir = dirname(bin);
+  try {
+    for (const m of readFileSync(bin, "utf8").matchAll(/"([^"
+]*\.exe)"/gi)) {
+      const target = join(m[1].replace(/%~?dp0%?/gi, dir));
+      if (existsSync(target)) return target;
+    }
+  } catch {
+    // unreadable shim: fall through to the package layout
+  }
+  const pkgExe = join(dir, "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe");
+  return existsSync(pkgExe) ? pkgExe : bin;
 }
 
 /**
@@ -537,8 +564,8 @@ async function inferenceAttempt(options: InferenceOptions, modelOverride?: strin
     let stdout = '';
     let stderr = '';
 
-    // public issue #2057 (@cammcd) is NOT ported: a shell:true spawn of claude.cmd would
-    // put the system prompt (an argv item) through cmd.exe. Needs a shell-free path.
+    // public issue #2057 (@cammcd): resolveClaudeBin returns the real claude.exe
+    // behind npm's claude.cmd shim, so this spawn stays shell-free on Windows.
     const claudeBin = resolveClaudeBin();
     const proc = spawn(claudeBin, args, {
       env,

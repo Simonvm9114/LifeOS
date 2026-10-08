@@ -35,6 +35,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, rea
 import { join } from "path";
 import { homedir } from "os";
 import { DISPATCH_EXECUTES_FABLE } from "./models";
+import { resolveWindowsShim } from "./Inference";
 import { getClaudeDir } from "./Paths"; // public issue #1974 @sabo961, PR #1918 @PigLardLord
 
 const CLAUDE_DIR = getClaudeDir();
@@ -100,7 +101,11 @@ function check(): number {
 
 function resolveClaudeBin(): string {
   const local = join(homedir(), ".local", "bin", "claude");
-  return existsSync(local) ? local : "claude";
+  if (existsSync(local)) return local;
+  // Windows: a bare "claude" never resolves for node:child_process, and npm's
+  // claude.cmd shim cannot be spawned without a shell (public issue #2057).
+  const fromPath = typeof Bun !== "undefined" ? Bun.which("claude") : null;
+  return fromPath ? resolveWindowsShim(fromPath) : "claude";
 }
 
 /** Run the child claude session; return its JSON envelope. Mirrors the
