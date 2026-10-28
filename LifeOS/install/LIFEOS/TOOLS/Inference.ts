@@ -133,8 +133,7 @@ export function resolveWindowsShim(bin: string): string {
   if (process.platform !== "win32" || !/\.(cmd|bat)$/i.test(bin)) return bin;
   const dir = dirname(bin);
   try {
-    for (const m of readFileSync(bin, "utf8").matchAll(/"([^"
-]*\.exe)"/gi)) {
+    for (const m of readFileSync(bin, "utf8").matchAll(/"([^"\r\n]*\.exe)"/gi)) {
       const target = join(m[1].replace(/%~?dp0%?/gi, dir));
       if (existsSync(target)) return target;
     }
