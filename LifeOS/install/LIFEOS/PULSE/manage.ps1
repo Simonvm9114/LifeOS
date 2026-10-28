@@ -56,6 +56,8 @@ switch ($Command.ToLower()) {
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
             -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
         Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $trigger -Settings $settings -Force | Out-Null
+        # Start it now, as launchd's load does: InstallAll checks /healthz right after install.
+        if (-not (Test-PulseUp)) { Start-ScheduledTask -TaskName $taskName }
         Write-Host "LifeOS Pulse installed (scheduled task '$taskName', runs at logon)"
     }
 
