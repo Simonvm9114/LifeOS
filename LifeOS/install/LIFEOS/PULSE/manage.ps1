@@ -35,6 +35,17 @@ function Get-PulseProcess {
 switch ($Command.ToLower()) {
     "install" {
         if (-not (Test-Path $startScript)) { Write-Error "missing $startScript"; exit 1 }
+        # There is one "LifeOS Pulse" task per user. An install from another config
+        # root (a test copy, a second profile) must not repoint it away from the
+        # task's current target; set LIFEOS_PULSE_TASK_REPOINT=1 to do that on purpose.
+        $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        if ($existing -and $env:LIFEOS_PULSE_TASK_REPOINT -ne "1") {
+            $current = ($existing.Actions | Select-Object -First 1).Arguments
+            if ($current -and $current -notlike "*$startScript*") {
+                Write-Host "LifeOS Pulse task already points at another install ($current); left unchanged. Set LIFEOS_PULSE_TASK_REPOINT=1 to repoint it."
+                exit 0
+            }
+        }
         # NOTE: do not rename this to $Action - PowerShell variables are
         # case-insensitive, so it would collide with a param named $Action and
         # Register-ScheduledTask would be handed the string instead of the action.

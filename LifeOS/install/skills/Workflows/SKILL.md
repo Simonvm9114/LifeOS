@@ -54,7 +54,7 @@ Customizations, when present: `<configRoot>/LIFEOS/USER/CUSTOMIZATIONS/SKILLS/Wo
 
 ## Setup
 
-Nothing to configure for authoring. The skill needs `bun` and the `LIFEOS/WORKFLOWS/` engine that ships with LifeOS. Definitions go in `LIFEOS/USER/WORKFLOWS/` (create the folder if it is missing; `LIFEOS_WORKFLOWS_DIR` points the CLI at another one). Status check: `bun LIFEOS/WORKFLOWS/workflow.ts help --json` prints the command catalog and exits 0. Local schedules are evaluated by one launchd job, `com.lifeos.workflows-dispatcher`, so scheduled and reminder workflows that run on this machine need macOS; defining and validating a workflow does not use launchd.
+Nothing to configure for authoring. The skill needs `bun` and the `LIFEOS/WORKFLOWS/` engine that ships with LifeOS. Definitions go in `LIFEOS/USER/WORKFLOWS/` (create the folder if it is missing; `LIFEOS_WORKFLOWS_DIR` points the CLI at another one). Status check: `bun LIFEOS/WORKFLOWS/workflow.ts help --json` prints the command catalog and exits 0. Local schedules are evaluated by one launchd job, `com.lifeos.workflows-dispatcher`, so scheduled and reminder workflows that run on this machine need macOS; defining and validating a workflow does not use launchd. On Windows the same job is a current-user Task Scheduler task of the same name (logon-triggered, restarted after any exit): `bun LIFEOS/WORKFLOWS/engine/schedule-install.ts install-dispatcher` installs it and `schedule-install.ts dispatcher-status` (or `Get-ScheduledTask -TaskName com.lifeos.workflows-dispatcher`) shows whether it is loaded; the Workflows inventory still reads launchd only, so it does not see that task.
 
 ## Gotchas
 

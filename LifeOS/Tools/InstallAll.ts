@@ -97,7 +97,7 @@ export interface ServicesReport {
   skippedInstallers: string[];
   loaded: string[];
   notLoaded: string[];
-  /** Targets with no unit for this platform (e.g. the macOS menu-bar app on Linux). */
+  /** Targets with no unit for this platform (e.g. the macOS menu-bar app on Linux or Windows). */
   unavailable: string[];
   pulseHealthy: boolean | null;
   recordedDeclined?: string[];
@@ -354,7 +354,9 @@ export function runInstall(o: InstallOpts, deps: Deps): InstallReport {
       if (svc.skippedInstallers.includes(label)) continue;
       const row = after.find((x) => x.label === label);
       if (row?.loaded) svc.loaded.push(label);
-      else if (o.platform === "linux" && row && !row.available) svc.unavailable.push(label);
+      // Off macOS, a core row with no unit or task for this platform (the menu-bar app and Conduit on Linux and
+      // Windows) is unavailable, not a failed install. On macOS a core row without its plist stays a failure, as before.
+      else if (o.platform !== "darwin" && row && !row.available) svc.unavailable.push(label);
       else svc.notLoaded.push(label);
     }
     if (svc.loaded.includes(PULSE_LABEL)) svc.pulseHealthy = deps.httpOk(PULSE_HEALTH_URL);

@@ -219,8 +219,26 @@ export function systemdListingHasLabel(listing: string, label: string): boolean 
   return listing.split("\n").some((line) => /^(.+)\.(service|timer|path)$/.exec(line.trim().split(/\s+/)[0] ?? "")?.[1] === label);
 }
 
-/** Is the service loaded? launchd on macOS, systemd --user on Linux — the same split Services.ts installs with. */
+/**
+ * Windows: a LifeOS service is a current-user Task Scheduler task named for its label (TOOLS/lib/SchtasksUser.ts), in the
+ * root folder or LIFEOS_SCHTASKS_FOLDER; Pulse's is "LifeOS Pulse" (PULSE/manage.ps1). Registered and not disabled = loaded.
+ */
+export function windowsTaskLoaded(label: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  if (!/^[A-Za-z0-9._-]+$/.test(label)) return false;
+  const folder = (env.LIFEOS_SCHTASKS_FOLDER ?? "").trim().replace(/^\\+|\\+$/g, "");
+  if (folder && !/^[A-Za-z0-9._ -]+$/.test(folder)) return false;
+  const [path, name] = label === "com.lifeos.pulse" ? ["\\", "LifeOS Pulse"] : [folder ? `\\${folder}\\` : "\\", label];
+  try {
+    const out = execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+      `$t = Get-ScheduledTask -TaskPath '${path}' -TaskName '${name}' -ErrorAction SilentlyContinue; if ($t) { $t.State.ToString() }`],
+      { stdio: ["pipe", "pipe", "pipe"], timeout: 30000, windowsHide: true }).toString().trim();
+    return out !== "" && out !== "Disabled";
+  } catch { return false; }
+}
+
+/** Is the service loaded? launchd on macOS, systemd --user on Linux, Task Scheduler on Windows — the same split Services.ts installs with. */
 export function serviceLoaded(label: string, platform: NodeJS.Platform = process.platform): boolean {
+  if (platform === "win32") return windowsTaskLoaded(label);
   if (platform === "linux") {
     try {
       const listing = execFileSync("systemctl", ["--user", "list-units", "--all", "--type=service,timer,path", "--plain", "--no-legend"], { stdio: ["pipe", "pipe", "pipe"], timeout: 15000 }).toString();

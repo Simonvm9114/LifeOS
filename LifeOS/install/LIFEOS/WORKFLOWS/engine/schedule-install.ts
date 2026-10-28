@@ -18,6 +18,7 @@ import { dirname, join, sep } from "node:path";
 import { invariant } from "../../TOOLS/Invariant.ts";
 import { defaultClaudeDir, expandPathFrom } from "../../TOOLS/Paths.ts";
 import { classifyServiceRow } from "../../TOOLS/Services.ts";
+import * as schtasks from "../../TOOLS/lib/SchtasksUser.ts";
 import { loadDefinitionFile } from "./format.ts";
 import { writeFileAtomic } from "./ledger.ts";
 import { definitionsDir, pathForName } from "./paths.ts";
@@ -185,6 +186,14 @@ export function installSchedule(name: string, opts: InstallOptions = {}): Instal
  * running (a reinstall would kill the runs it holds as children). `loaded` is true whenever the job is loaded afterwards.
  */
 export function ensureDispatcher(opts: InstallOptions & { home?: string } = {}): InstallResult {
+  if (onWindows(opts)) {
+    const files = dispatcherTaskFiles();
+    const want = `${JSON.stringify(schtasks.runnerSpec(dispatcherTaskSpec(opts)), null, 2)}\n`;
+    const current = existsSync(files.json) && readFileSync(files.json, "utf8") === want;
+    const running = opts.load !== false && dispatcherTaskState() === "Running";
+    if (current && (running || opts.load === false)) return { label: DISPATCHER_LABEL, plistPath: files.xml, loaded: running, calendar: 0, interval: null };
+    return installDispatcher(opts);
+  }
   const plistPath = plistTarget(opts.launchAgentsDir ?? defaultAgentsDir(), DISPATCHER_LABEL);
   const want = dispatcherPlist({ home: opts.home, extraEnv: installRootEnv(opts.env) });
   const current = existsSync(plistPath) && readFileSync(plistPath, "utf8") === want;
@@ -195,6 +204,8 @@ export function ensureDispatcher(opts: InstallOptions & { home?: string } = {}):
 
 export function uninstallSchedule(name: string, opts: InstallOptions = {}): { label: string; removedPlist: boolean; unregistered: boolean } {
   const label = labelFor(name);
+  // Windows never had per-workflow jobs (and has no LaunchAgents): only the registry row can be left over.
+  if (onWindows(opts)) return { label, removedPlist: false, unregistered: unregisterService(opts.servicesPath ?? defaultServicesPath(), label) };
   const agents = opts.launchAgentsDir ?? defaultAgentsDir();
   const plistPath = plistTarget(agents, label);
   if (opts.load !== false) {
@@ -281,7 +292,66 @@ export function dispatcherPlist(opts: { home?: string; bun?: string; path?: stri
   ].join("\n");
 }
 
+/* ── Windows: the dispatcher as a Task Scheduler logon task ─────────────────
+ * launchd has no Windows counterpart, so on win32 (with no launchctl injected, which is how every test reaches the
+ * launchd path) the one dispatcher job is a current-user Task Scheduler task built by TOOLS/lib/SchtasksUser.ts: it
+ * starts at logon, TaskRunner keeps `dispatcher.ts serve` alive the way KeepAlive + ThrottleInterval 30 do (restart
+ * 30 s after any exit), and Task Scheduler restarts the runner itself on failure. Stopping it ends the runner and the
+ * dispatcher but not the runs the dispatcher started (launchd's AbandonProcessGroup). Logs sit in MEMORY/STATE,
+ * since there is no ~/Library/Logs. The darwin path below is unchanged.
+ * ------------------------------------------------------------------------- */
+
+function onWindows(opts: InstallOptions): boolean {
+  return process.platform === "win32" && !opts.launchctl;
+}
+
+function dispatcherTaskFiles(): { xml: string; json: string } {
+  return { xml: join(schtasks.TASK_DIR, `${DISPATCHER_LABEL}.xml`), json: join(schtasks.TASK_DIR, `${DISPATCHER_LABEL}.json`) };
+}
+
+export function dispatcherTaskSpec(opts: { home?: string; env?: NodeJS.ProcessEnv; bun?: string } = {}): schtasks.UnitSpec {
+  const home = opts.home ?? homedir();
+  const lifeos = schtasks.lifeosRoot();
+  const logs = join(lifeos, "MEMORY", "STATE");
+  return {
+    label: DISPATCHER_LABEL,
+    description: "LifeOS Workflows dispatcher — evaluates every local workflow trigger each minute (dispatcher.ts serve)",
+    exec: [opts.bun ?? (schtasks.whichSync("bun") || process.execPath), join(HERE, "dispatcher.ts"), "serve"],
+    logPath: join(logs, `${DISPATCHER_LABEL}.out.log`),
+    errLogPath: join(logs, `${DISPATCHER_LABEL}.err.log`),
+    workingDirectory: dirname(lifeos),
+    environment: { ...installRootEnv(opts.env, home), HOME: home, LIFEOS_NOTIFICATION_CHANNEL: HEADLESS_CHANNEL },
+    schedule: { kind: "daemon", restartSec: 30 },
+  };
+}
+
+/** The dispatcher task's state ("Running", "Ready", ...), or null when it is not registered. */
+export function dispatcherTaskState(): string | null {
+  const p = Bun.spawnSync(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+    `$t = Get-ScheduledTask -TaskPath '${schtasks.taskPath().replace(/'/g, "''")}' -TaskName '${DISPATCHER_LABEL}' -ErrorAction SilentlyContinue; if ($t) { $t.State.ToString() }`],
+    { stdout: "pipe", stderr: "pipe", windowsHide: true });
+  const state = p.stdout.toString().trim();
+  return state || null;
+}
+
+/** Is the one Workflows job loaded? launchd on macOS (`launchctl print`), the Task Scheduler task on Windows. */
+export function dispatcherLoaded(opts: InstallOptions = {}): boolean {
+  if (onWindows(opts)) {
+    const state = dispatcherTaskState();
+    return state !== null && state !== "Disabled";
+  }
+  return (opts.launchctl ?? realLaunchctl)(["print", `${domain(opts.uid ?? process.getuid!())}/${DISPATCHER_LABEL}`]).code === 0;
+}
+
 export function installDispatcher(opts: InstallOptions & { home?: string } = {}): InstallResult {
+  if (onWindows(opts)) {
+    const files = dispatcherTaskFiles();
+    if (opts.load === false) return { label: DISPATCHER_LABEL, plistPath: files.xml, loaded: false, calendar: 0, interval: null };
+    const lines: string[] = [];
+    const ok = schtasks.installSync(dispatcherTaskSpec(opts), m => lines.push(m));
+    invariant(ok, `Task Scheduler registration of ${DISPATCHER_LABEL} failed: ${lines.join("; ").slice(0, 300)}`);
+    return { label: DISPATCHER_LABEL, plistPath: files.xml, loaded: true, calendar: 0, interval: null };
+  }
   const agents = opts.launchAgentsDir ?? defaultAgentsDir();
   const plistPath = plistTarget(agents, DISPATCHER_LABEL);
   writeFileAtomic(plistPath, dispatcherPlist({ home: opts.home, extraEnv: installRootEnv(opts.env) }));
@@ -304,6 +374,11 @@ export function installDispatcher(opts: InstallOptions & { home?: string } = {})
 }
 
 export function uninstallDispatcher(opts: InstallOptions = {}): { label: string; removedPlist: boolean } {
+  if (onWindows(opts)) {
+    const removedPlist = existsSync(dispatcherTaskFiles().xml);
+    if (opts.load !== false) schtasks.uninstallLabelSync(DISPATCHER_LABEL, () => {});
+    return { label: DISPATCHER_LABEL, removedPlist };
+  }
   const plistPath = plistTarget(opts.launchAgentsDir ?? defaultAgentsDir(), DISPATCHER_LABEL);
   if (opts.load !== false) (opts.launchctl ?? realLaunchctl)(["bootout", `${domain(opts.uid ?? process.getuid!())}/${DISPATCHER_LABEL}`]);
   const removedPlist = existsSync(plistPath);
@@ -326,8 +401,13 @@ if (import.meta.main) {
     }
     else if (command === "install-dispatcher") console.log(JSON.stringify(installDispatcher()));
     else if (command === "uninstall-dispatcher") console.log(JSON.stringify(uninstallDispatcher()));
+    else if (command === "dispatcher-status") {
+      const loaded = dispatcherLoaded();
+      console.log(JSON.stringify({ label: DISPATCHER_LABEL, loaded, ...(process.platform === "win32" ? { task: schtasks.taskName(DISPATCHER_LABEL), state: dispatcherTaskState() } : {}) }));
+      if (!loaded) process.exit(1);
+    }
     else {
-      console.error("usage: schedule-install.ts install <name> | uninstall <name> | drift [--fix] | install-dispatcher | uninstall-dispatcher");
+      console.error("usage: schedule-install.ts install <name> | uninstall <name> | drift [--fix] | install-dispatcher | uninstall-dispatcher | dispatcher-status");
       process.exit(2);
     }
   } catch (error) {

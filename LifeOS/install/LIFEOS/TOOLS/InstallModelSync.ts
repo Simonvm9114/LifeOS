@@ -6,6 +6,9 @@
  *   bun ~/.claude/LIFEOS/TOOLS/InstallModelSync.ts             # install
  *   bun ~/.claude/LIFEOS/TOOLS/InstallModelSync.ts --uninstall # remove
  *   bun ~/.claude/LIFEOS/TOOLS/InstallModelSync.ts --status    # check
+ *
+ * win32: the same job as a current-user Task Scheduler task (lib/SchtasksUser.ts),
+ * daily 05:10, missed runs caught up on wake. The launchd path below is unchanged.
  */
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
@@ -13,6 +16,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { lifeosPath } from "./Paths"; // public issue #1974 @sabo961, PR #1918 @PigLardLord
 import { installVerb } from "./lib/InstallVerb";
+import * as schtasks from "./lib/SchtasksUser";
 
 const HOME = homedir();
 const LABEL = "com.lifeos.modelsync";
@@ -23,6 +27,30 @@ async function sh(cmd: string[]): Promise<{ exit: number; out: string }> {
   const proc = Bun.spawn(cmd, { stdout: "pipe", stderr: "pipe" });
   const out = (await new Response(proc.stdout).text()) + (await new Response(proc.stderr).text());
   return { exit: await proc.exited, out };
+}
+
+if (schtasks.isWindows()) {
+  const verb = installVerb(process.argv, "InstallModelSync");
+  const lifeos = schtasks.lifeosRoot();
+  const bunBin = schtasks.whichSync("bun") || process.execPath;
+  const spec: schtasks.UnitSpec = {
+    label: LABEL,
+    description: "LifeOS model sync — daily Claude lineup + price table refresh (ModelSync --daily, headless)",
+    exec: [bunBin, join(lifeos, "TOOLS", "ModelSync.ts"), "--daily"],
+    logPath: join(lifeos, "MEMORY", "OBSERVABILITY", "model-sync-launchd.log"),
+    workingDirectory: dirname(lifeos),
+    environment: { ...schtasks.installEnv(), LIFEOS_NOTIFICATION_CHANNEL: "headless" },
+    schedule: { kind: "calendar", hour: 5, minute: 10 },
+  };
+  const log = (m: string) => console.log(`[InstallModelSync] ${m}`);
+  if (verb === "--status") process.exit(schtasks.statusSync(spec, log) ? 0 : 1);
+  if (verb === "--uninstall") { schtasks.uninstallSync(spec, log); process.exit(0); }
+  if (!schtasks.installSync(spec, log)) process.exit(1);
+  console.log(`Installed ${LABEL} (daily 05:10) → Task Scheduler ${schtasks.taskName(LABEL)}`);
+  // First sync now, best-effort, for the same reason as the launchd path below.
+  const first = await sh([bunBin, join(lifeos, "TOOLS", "ModelSync.ts"), "--sync"]);
+  console.log(first.exit === 0 ? "First sync: done" : `First sync skipped (${first.out.trim().split("\n").pop()}) — the daily job will retry`);
+  process.exit(0);
 }
 
 const uid = (await sh(["id", "-u"])).out.trim();

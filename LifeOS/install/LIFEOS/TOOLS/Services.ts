@@ -31,13 +31,22 @@ import { PRIVATE_SKILL_NAMES } from "./CodeDataBoundary.ts";
  * "✗ missing" on Linux; that's fact, not a bug.
  *
  * ported from public PR #1705, @takanorinishida
+ *
+ * Windows: a third branch beside the two above. Services are current-user Task
+ * Scheduler tasks (lib/SchtasksUser.ts; Pulse's own "LifeOS Pulse" task from
+ * PULSE/manage.ps1). Only rows in WINDOWS_SERVICES have a Windows install path;
+ * every other row is rewritten to a `#` note on win32, so it is reported
+ * "unavailable" (not "missing") and an install sweep passes over it instead of
+ * running a launchd installer that cannot work there.
  */
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { getClaudeDir } from "./Paths"; // public issue #1974 @sabo961, PR #1918 @PigLardLord
+import * as schtasks from "./lib/SchtasksUser";
 
 const IS_LINUX = process.platform === "linux";
+const IS_WINDOWS = process.platform === "win32";
 const HOME = homedir();
 const CLAUDE = getClaudeDir();
 const LIFEOS = join(CLAUDE, "LIFEOS");
@@ -313,7 +322,46 @@ export function movedToWorkflow(label: string, defsDir: string = join(LIFEOS, "U
 }
 
 export function allServices(): Svc[] {
-  return [...SERVICES, ...loadUserServices()].filter((s) => !movedToWorkflow(s.label));
+  return [...SERVICES, ...loadUserServices()].filter((s) => !movedToWorkflow(s.label)).map((s) => forPlatform(s));
+}
+
+/* ── Windows (Task Scheduler) ─────────────────────────────────────────────── */
+
+/** The task PULSE/manage.ps1 registers for Pulse (root folder, fixed name). */
+export const PULSE_WINDOWS_TASK = "LifeOS Pulse";
+
+interface WinSvc { install: string; uninstall: string; script: string; cadence: string }
+
+/**
+ * Every registry row that has a Windows install path, with the cadence its
+ * task declares. A row absent here has none (the macOS menu-bar app, Conduit,
+ * and every installer that only speaks launchd/systemd so far).
+ */
+export function windowsServices(): Record<string, WinSvc> {
+  const ps1 = join(PULSE, "manage.ps1");
+  const pulseCmd = (verb: string) => cmd("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", ps1, verb);
+  const bunTs = (script: string, cadence: string): WinSvc =>
+    ({ install: cmd("bun", script), uninstall: cmd("bun", script, "--uninstall"), script, cadence });
+  return {
+    "com.lifeos.pulse": { install: pulseCmd("install"), uninstall: pulseCmd("uninstall"), script: ps1, cadence: "at load" },
+    "com.lifeos.deriver": bunTs(join(PULSE, "InstallDeriverWindows.ts"), "daily/scheduled"),
+    "com.lifeos.modelsync": bunTs(join(TOOLS, "InstallModelSync.ts"), "daily/scheduled"),
+    "com.lifeos.worksweep": bunTs(join(TOOLS, "InstallWorkSweep.ts"), "every 1h"),
+  };
+}
+
+/**
+ * A registry row as this platform installs it. darwin/linux: unchanged. win32: the
+ * Windows install/uninstall when the row has one, else a `#` note (not runnable, so
+ * an install sweep skips it and status reports it unavailable). Per-instance rows
+ * from USER/CONFIG/services.json are the principal's own commands and pass as written.
+ */
+export function forPlatform(s: Svc, platform: NodeJS.Platform = process.platform): Svc {
+  if (platform !== "win32" || s.perInstance) return s;
+  const w = windowsServices()[s.label];
+  if (w) return { ...s, install: w.install, uninstall: w.uninstall };
+  const { uninstall: _drop, ...rest } = s;
+  return { ...rest, install: "# no Windows install path for this service (launchd/systemd only)" };
 }
 
 function sh(command: string): { code: number; out: string } {
@@ -344,8 +392,13 @@ export const SAFE_LABEL = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}$/;
  * The default uninstall, run as argument arrays and direct file removal: the label is validated, never
  * interpolated into a shell string. Returns the result the CLI prints.
  */
-export function defaultUninstall(label: string, opts: { linux: boolean; uid?: number } = { linux: IS_LINUX }): { code: number; out: string } {
+export function defaultUninstall(label: string, opts: { linux: boolean; uid?: number; windows?: boolean } = { linux: IS_LINUX, windows: IS_WINDOWS }): { code: number; out: string } {
   if (!SAFE_LABEL.test(label)) return { code: 1, out: `refusing to uninstall: unsafe service label ${JSON.stringify(label.slice(0, 80))}` };
+  if (opts.windows && !opts.linux) {
+    const lines: string[] = [];
+    schtasks.uninstallLabelSync(label, (m) => lines.push(m));
+    return { code: 0, out: lines.join("\n") };
+  }
   const rm = (p: string) => { try { rmSync(p, { force: true }); } catch { /* absent or unremovable: the launchctl/systemctl result below is the signal */ } };
   if (opts.linux) {
     runArgv(["systemctl", "--user", "disable", "--now", `${label}.path`, `${label}.timer`, `${label}.service`]);
@@ -403,7 +456,20 @@ function loadedLabelsLinux(): Set<string> {
   );
 }
 
+/**
+ * The Task Scheduler equivalent: every enabled task in the LifeOS task folder,
+ * by name (= label). Pulse's task has its own fixed name in the root folder,
+ * so "LifeOS Pulse" there reads as com.lifeos.pulse.
+ */
+function loadedLabelsWindows(): Set<string> {
+  const names = schtasks.enabledTaskNames();
+  const root = schtasks.taskPath() === "\\" ? names : schtasks.enabledTaskNames("\\");
+  if (root.has(PULSE_WINDOWS_TASK)) names.add("com.lifeos.pulse");
+  return names;
+}
+
 export function loadedLabels(): Set<string> {
+  if (IS_WINDOWS) return loadedLabelsWindows();
   return IS_LINUX ? loadedLabelsLinux() : loadedLabelsDarwin();
 }
 
@@ -453,7 +519,24 @@ function findPlistLinux(label: string): { path: string; installed: boolean } | n
   return null;
 }
 
+/**
+ * win32: the task XML SchtasksUser wrote marks an installed service; a row with a
+ * Windows install path whose script is present is available; anything else has no
+ * Windows path (null → "unavailable"). Pulse's task is not written by SchtasksUser,
+ * so its manage.ps1 stands in for both cases. Per-instance rows count as available
+ * whenever they carry a runnable install command.
+ */
+function findPlistWindows(label: string): { path: string; installed: boolean } | null {
+  const xml = join(schtasks.TASK_DIR, `${label}.xml`);
+  if (SAFE_LABEL.test(label) && existsSync(xml)) return { path: xml, installed: true };
+  const w = windowsServices()[label];
+  if (w) return existsSync(w.script) ? { path: w.script, installed: false } : null;
+  const user = loadUserServices().find((s) => s.label === label);
+  return user && !user.install.startsWith("#") ? { path: USER_SERVICES_PATH, installed: false } : null;
+}
+
 export function findPlist(label: string): { path: string; installed: boolean } | null {
+  if (IS_WINDOWS) return findPlistWindows(label);
   return IS_LINUX ? findPlistLinux(label) : findPlistDarwin(label);
 }
 
@@ -488,7 +571,19 @@ function cadenceOfLinux(unitPath: string): string {
   } catch { return "?"; }
 }
 
+function cadenceOfWindows(path: string): string {
+  if (path.toLowerCase().endsWith(".xml")) {
+    try {
+      const buf = readFileSync(path);
+      const text = buf[0] === 0xff && buf[1] === 0xfe ? buf.subarray(2).toString("utf16le") : buf.toString("utf8");
+      return schtasks.cadenceOfTaskXml(text);
+    } catch { return "?"; }
+  }
+  return Object.values(windowsServices()).find((w) => w.script === path)?.cadence ?? "—";
+}
+
 export function cadenceOf(unitPath: string): string {
+  if (IS_WINDOWS) return cadenceOfWindows(unitPath);
   return IS_LINUX ? cadenceOfLinux(unitPath) : cadenceOfDarwin(unitPath);
 }
 
@@ -537,13 +632,18 @@ if ((cmd === "status" || cmd === "list") && process.argv.includes("--json")) {
     console.log(`\n  ── ${cat} ──`);
     for (const s of rows) {
       const pl = findPlist(s.label);
-      const state = loaded.has(s.label) ? "● running" : pl?.installed ? "○ installed" : pl ? "· available" : "✗ missing";
+      const state = loaded.has(s.label) ? "● running" : pl?.installed ? "○ installed" : pl ? "· available" : IS_WINDOWS ? "⊘ n/a (win)" : "✗ missing";
       const cad = pl ? cadenceOf(pl.path) : "—";
       console.log("  " + state.padEnd(13) + cad.padEnd(16) + `${s.title}  (${s.label})`);
     }
   }
-  const missingCore = REGISTRY.filter((s) => !s.optIn && !loaded.has(s.label));
+  // win32: a core row with no Windows install path is unavailable there, not "not running".
+  const missingCore = REGISTRY.filter((s) => !s.optIn && !loaded.has(s.label) && (!IS_WINDOWS || findPlist(s.label)));
   if (missingCore.length) console.log(`\n  ⚠️ core not running: ${missingCore.map((s) => s.label).join(", ")}`);
+  if (IS_WINDOWS) {
+    const na = REGISTRY.filter((s) => !s.optIn && !findPlist(s.label));
+    if (na.length) console.log(`  ⊘ core with no Windows install path (unavailable here): ${na.map((s) => s.label).join(", ")}`);
+  }
 } else if (cmd === "doc") {
   console.log("| Service | Category | Cadence | Opt-in | Purpose | Install |");
   console.log("|---------|----------|---------|--------|---------|---------|");
@@ -594,7 +694,7 @@ if ((cmd === "status" || cmd === "list") && process.argv.includes("--json")) {
   let failed = 0, skipped = 0, skippedRequested = 0;
   for (const s of targets) {
     const script = installerScript(s.install);
-    if (script && script.startsWith("/") && !existsSync(script)) {
+    if (script && isAbsolute(script) && !existsSync(script)) {
       const requested = strict || (Boolean(onlyArg) && s.optIn);
       console.log(`  ${s.label} … ⏭  skipped${requested ? " — REQUESTED, NOT INSTALLED" : ""} (installer not present in this install: ${script.replace(HOME, "~")})`);
       skipped++;
