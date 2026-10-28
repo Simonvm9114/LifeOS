@@ -24,7 +24,7 @@ import {
 } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { hostname } from "node:os"
-import { basename, dirname, isAbsolute, join, sep } from "node:path"
+import { basename, dirname, isAbsolute, join, parse, sep } from "node:path"
 import { invariant, InvariantViolation } from "../Invariant"
 import {
   isVerificationCode as labelIsVerificationCode,
@@ -58,12 +58,15 @@ export function confinedPath(root: string, p: string): string | null {
   try { realRoot = realpathSync(root) } catch { return null }
 
   const relative = !isAbsolute(p)
-  let cur = relative ? realRoot : sep
+  // An absolute path is walked from its own filesystem root: `/` on POSIX, `C:\` on Windows,
+  // where splitting from `\` read the drive as a directory and refused every write.
+  const fsRoot = relative ? "" : parse(p).root
+  let cur = relative ? realRoot : fsRoot.replace(/[\\/]+$/, "") + sep
   let curIsDir = true
   let missing = false
   const tail: string[] = []
 
-  for (const comp of p.split(sep)) {
+  for (const comp of p.slice(fsRoot.length).split(sep === "\\" ? /[\\/]/ : sep)) {
     if (comp === "" || comp === ".") continue
     if (missing) {
       if (comp === "..") return null
@@ -74,7 +77,7 @@ export function confinedPath(root: string, p: string): string | null {
     if (comp === "..") {
       cur = dirname(cur)
     } else {
-      const next = cur === sep ? sep + comp : cur + sep + comp
+      const next = cur.endsWith(sep) ? cur + comp : cur + sep + comp
       let st
       try { st = lstatSync(next) } catch (e) {
         if (errCode(e) === "ENOENT") { missing = true; tail.push(comp); continue }
