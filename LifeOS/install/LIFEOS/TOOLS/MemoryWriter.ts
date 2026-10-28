@@ -59,7 +59,7 @@ import {
 import { InvariantViolation, invariant } from "./Invariant";
 import { getClaudeDir } from "./Paths"; // public issue #1665 @rogdex24, #1584 @ramazanpolat — aliased resolve sites missed by the 09-03 sweep
 import { spawnSync } from "node:child_process";
-import { dirname, relative, resolve as pathResolve } from "node:path";
+import { basename, dirname, relative, resolve as pathResolve } from "node:path";
 import { appendEvent, archiveContent, entriesHash, foldState, readRows, sha256, type AppendResult } from "./lib/CortexLedgerCore";
 import { isInstructionShaped } from "./InjectionShapes";
 import { assertInsideUserData } from "./lib/ForeignDataCheck";
@@ -70,6 +70,19 @@ import { atomicWrite as boundaryAtomicWrite } from "./lib/Boundary";
 // ── Constants ──
 
 const CLAUDE_ROOT = getClaudeDir();
+
+/**
+ * Ledger key for a path under CLAUDE_ROOT: root-relative with forward slashes, the shape the fold
+ * and `CortexLedger verify` compare against. On Windows `abs` uses backslashes, so a plain
+ * `replace(CLAUDE_ROOT + "/", "")` left the absolute path in the row and the fold never matched it.
+ * Paths outside the root stay as given.
+ */
+export function claudeRel(abs: string): string {
+  for (const s of ["/", "\\"]) {
+    if (abs.startsWith(CLAUDE_ROOT + s)) return abs.slice(CLAUDE_ROOT.length + 1).replace(/\\/g, "/");
+  }
+  return abs;
+}
 
 const ALLOWED_FILES = new Set<string>([
   pathResolve(CLAUDE_ROOT, "LIFEOS/USER/PRINCIPAL/PRINCIPAL_MEMORY.md"),
@@ -579,23 +592,27 @@ const SNAPSHOT_RING = 30;
 // 0700 directory, written through the shared Boundary.atomicWrite.
 const SNAPSHOT_FILE_MODE = 0o600;
 const SNAPSHOT_DIR_MODE = 0o700;
+// Windows has no POSIX mode bits: stat reports 0666/0777 and chmod only toggles read-only, so the
+// 0700 check can never pass there. Owner-only access comes from the profile directory's ACL instead.
+const POSIX_MODES = process.platform !== "win32";
 
 /** Narrow `p` to `want` when it is wider; never widens. */
 function tightenMode(p: string, want: number): void {
+  if (!POSIX_MODES) return;
   const st = statSync(p);
   if ((st.mode & 0o777 & ~want) !== 0) chmodSync(p, st.mode & 0o777 & want);
 }
 
 function snapshotBeforeWrite(absPath: string, priorContent: string): void {
   try {
-    const base = absPath.split("/").pop()!.replace(/\.md$/, "");
+    const base = basename(absPath).replace(/\.md$/, ""); // basename, not split("/"): Windows paths use backslashes
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const target = pathResolve(SNAPSHOT_DIR, `${base}__${stamp}.md`);
     invariant(dirname(target) === SNAPSHOT_DIR && base.length > 0, `snapshot target ${target} must sit directly in ${SNAPSHOT_DIR}`);
     // A ring created by an older build (0755 / 0644) is tightened before the new copy lands in it.
     if (existsSync(SNAPSHOT_DIR)) tightenMode(SNAPSHOT_DIR, SNAPSHOT_DIR_MODE);
     boundaryAtomicWrite(target, priorContent, { mode: SNAPSHOT_FILE_MODE, dirMode: SNAPSHOT_DIR_MODE });
-    invariant((statSync(SNAPSHOT_DIR).mode & 0o777 & ~SNAPSHOT_DIR_MODE) === 0, `snapshot dir ${SNAPSHOT_DIR} is wider than 0700`);
+    invariant(!POSIX_MODES || (statSync(SNAPSHOT_DIR).mode & 0o777 & ~SNAPSHOT_DIR_MODE) === 0, `snapshot dir ${SNAPSHOT_DIR} is wider than 0700`);
     // Trim the ring: keep the newest SNAPSHOT_RING per base file; tighten the survivors.
     const mine = readdirSync(SNAPSHOT_DIR)
       .filter((f: string) => f.startsWith(`${base}__`))
@@ -685,7 +702,7 @@ function logRejectedWrite(
     appendEvent({
       kind: "memory/rejected",
       ts: new Date().toISOString(),
-      file: filePath.replace(CLAUDE_ROOT + "/", ""),
+      file: claudeRel(filePath),
       updated_by: options.updatedBy ?? "unknown",
       ...(options.sessionId ? { session_id: options.sessionId } : {}),
       ...(options.runId ? { run_id: options.runId } : {}),
@@ -863,7 +880,7 @@ export function adoptLive(filePath: string, opts: { updatedBy: string; sessionId
   if (!existsSync(abs)) return { ok: false, code: "EINVAL_PATH", message: `Memory file does not exist: ${abs}` };
   const result = withLock(abs, (): AdoptResult => {
     const content = readFileSync(abs, "utf8");
-    const rel = abs.replace(CLAUDE_ROOT + "/", "");
+    const rel = claudeRel(abs);
     const drift = inspectDrift(rel, content, parseMemoryContent(content).entries);
     if (drift === null) return { ok: true, adopted: false, file: rel };
     if (drift.invalid.length > 0) {
@@ -962,7 +979,7 @@ export function setEntries(
     const parsed = parseMemoryContent(content);
     const priorEntries = parsed.entries;
     const newEntries = validated.accepted;
-    const rel = abs.replace(CLAUDE_ROOT + "/", "");
+    const rel = claudeRel(abs);
 
     // Drift check (curated ⟺ folded): when an out-of-band writer changed the
     // entries region, adopt that edit as a ledger event first, so the guards
@@ -1182,7 +1199,7 @@ export function restoreContent(
   const abs = pathCheck.abs;
 
   const result = withLock(abs, () => {
-    const rel = abs.replace(CLAUDE_ROOT + "/", "");
+    const rel = claudeRel(abs);
     // A restore is recovery, not curation, but recovery content predating a redaction must not resurrect it.
     const tombstoned = tombstonedIn(parseMemoryContent(content).entries);
     if (tombstoned.length > 0) return redactedRefusal(tombstoned, "restore content");

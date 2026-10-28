@@ -162,7 +162,8 @@ export function atomicWrite(path: string, data: string | Uint8Array, opts: Atomi
       let off = 0
       while (off < bytes.length) off += writeSync(fd, bytes, off, bytes.length - off)
       fsyncSync(fd)
-      invariant((fstatSync(fd).mode & 0o777) === mode, `atomicWrite: temp file mode is not 0o${mode.toString(8)}`)
+      // Windows has no POSIX mode bits (fstat reports 0o666 or 0o444), so the check only holds elsewhere.
+      invariant(process.platform === "win32" || (fstatSync(fd).mode & 0o777) === mode, `atomicWrite: temp file mode is not 0o${mode.toString(8)}`)
     } finally {
       closeSync(fd)
     }
