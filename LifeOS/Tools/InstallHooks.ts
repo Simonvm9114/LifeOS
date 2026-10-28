@@ -18,7 +18,7 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync,
 import { execFileSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
-import { mergeHooks, pruneRetiredHooks, refuseDevInstallWrites, repointHookRoots, rewriteHookRoots } from "./InstallEngine";
+import { hookRootPath, mergeHooks, pruneRetiredHooks, refuseDevInstallWrites, repairWindowsHookRoots, repointHookRoots, rewriteHookRoots } from "./InstallEngine";
 import { detectEnv } from "./DetectEnv";
 import { atomicWriteText } from "./lib/atomic-write";
 
@@ -53,7 +53,7 @@ function countFilesRec(dir: string): number {
 
 /** Config-root registrations whose executed hook file is absent after the copy. */
 export function wiredButMissingHooks(hooks: Record<string, unknown>, configRoot: string): string[] {
-  const root = `${resolve(configRoot)}/hooks/`;
+  const root = `${hookRootPath(resolve(configRoot))}/hooks/`;
   const missing = new Set<string>();
   for (const groups of Object.values(hooks)) {
     if (!Array.isArray(groups)) continue;
@@ -64,7 +64,8 @@ export function wiredButMissingHooks(hooks: Record<string, unknown>, configRoot:
         const tokens = hook.command.match(/(?:"[^"]*"|'[^']*'|\S+)/g) ?? [];
         const first = tokens[0]?.replace(/^["']|["']$/g, "") ?? "";
         const script = (/^(?:bun|node|bash|sh)$/.test(first) ? tokens[1] : tokens[0])?.replace(/^["']|["']$/g, "") ?? "";
-        if (script.startsWith(root) && /\.hook\.(?:ts|sh)$/.test(script) && !existsSync(script)) missing.add(script.slice(root.length));
+        const scriptPath = hookRootPath(script);
+        if (scriptPath.startsWith(root) && /\.hook\.(?:ts|sh)$/.test(scriptPath) && !existsSync(scriptPath)) missing.add(scriptPath.slice(root.length));
       }
     }
   }
@@ -138,9 +139,11 @@ function main(): void {
   // A custom-root profile installed before rewriteHookRoots still carries `$HOME/.claude` commands; the
   // dedup would keep them, so repoint our own entries at this root before merging.
   const { hooks: repairedHooks, repointed } = repointHookRoots(retainedHooks, incoming, configRoot, process.env.HOME || homedir());
-  const { merged, added, skipped } = mergeHooks(repairedHooks, incoming, configRoot);
+  // Windows installs before hookRootPath wrote a bash-escaped root that never resolved; move them to forward slashes.
+  const { hooks: slashedHooks, repaired: windowsPaths } = repairWindowsHookRoots(repairedHooks, configRoot);
+  const { merged, added, skipped } = mergeHooks(slashedHooks, incoming, configRoot);
 
-  const report = { ok: true, apply, settingsPath, added, skipped, pruned, repointed, events: Object.keys(merged).length, hooksDestDir, hookFiles };
+  const report = { ok: true, apply, settingsPath, added, skipped, pruned, repointed, windowsPaths, events: Object.keys(merged).length, hooksDestDir, hookFiles };
 
   if (!apply) {
     console.log(JSON.stringify({ ...report, dryRun: true, note: "no changes written; re-run with --apply after permission" }, null, 2));

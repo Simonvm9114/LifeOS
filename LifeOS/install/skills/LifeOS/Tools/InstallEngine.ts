@@ -1252,7 +1252,13 @@ function normalizeCommand(cmd: string, configRoot?: string): string {
   // An already-installed entry carries the resolved configRoot literal while the
   // incoming payload entry still carries the $HOME form. Both must collapse to
   // the same token or a second run duplicates every hook.
-  if (configRoot) out = out.split(configRoot).join("§ROOT§");
+  // On Windows the root may appear raw, bash-escaped (installs before
+  // hookRootPath) or with forward slashes (hookRootPath); collapse all three.
+  if (configRoot) {
+    for (const form of new Set([shellQuoteRoot(configRoot, "none"), hookRootPath(configRoot), configRoot])) {
+      out = out.split(form).join("§ROOT§");
+    }
+  }
   return out
     .replace(ROOT_PATTERN, "§ROOT§")
     .replace(/\s+/g, " ")
@@ -1370,7 +1376,40 @@ const HOME_FORMS = /(?:~|\$HOME|\$\{HOME\})\/\.claude/g;
 
 /** One command with every HOME-relative `.claude` root resolved to `configRoot`, quoted for its shell position. */
 function rewriteHomeRoot(cmd: string, configRoot: string): string {
-  return cmd.replace(HOME_FORMS, (_m, offset: number) => shellQuoteRoot(configRoot, quoteStateAt(cmd, offset)));
+  return cmd.replace(HOME_FORMS, (_m, offset: number) => shellQuoteRoot(hookRootPath(configRoot), quoteStateAt(cmd, offset)));
+}
+
+/**
+ * The config root as hook commands spell it. On Windows the hooks run through
+ * Git Bash, where a backslash is an escape: the bash-escaped `C:\\Users\\me\\.claude`
+ * reached bun as `C:Usersme.claude` once the command line also passed through
+ * MSYS argv parsing, so every `bun <root>/...` hook failed to load. Forward
+ * slashes need no escaping, and bash and bun both accept them.
+ */
+export function hookRootPath(configRoot: string, platform: NodeJS.Platform = process.platform): string {
+  return platform === "win32" ? configRoot.replace(/\\/g, "/") : configRoot;
+}
+
+/** Rewrite installed commands that carry the bash-escaped Windows root to the hookRootPath form. */
+export function repairWindowsHookRoots(hooks: HooksMap, configRoot: string, platform: NodeJS.Platform = process.platform): { hooks: HooksMap; repaired: number } {
+  if (platform !== "win32") return { hooks, repaired: 0 };
+  const escaped = shellQuoteRoot(resolve(configRoot), "none");
+  const fixed = hookRootPath(resolve(configRoot), platform);
+  const out: HooksMap = JSON.parse(JSON.stringify(hooks ?? {}));
+  let repaired = 0;
+  for (const groups of Object.values(out)) {
+    if (!Array.isArray(groups)) continue;
+    for (const g of groups) {
+      if (!Array.isArray(g.hooks)) continue;
+      for (const h of g.hooks) {
+        if (typeof h.command === "string" && h.command.includes(escaped)) {
+          h.command = h.command.split(escaped).join(fixed);
+          repaired++;
+        }
+      }
+    }
+  }
+  return { hooks: out, repaired };
 }
 
 /**
