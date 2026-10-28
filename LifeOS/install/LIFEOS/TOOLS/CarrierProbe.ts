@@ -142,7 +142,7 @@ function runChild(): Promise<{ envelope: Record<string, unknown> | null; raw: st
 
     let stdout = "";
     let stderr = "";
-    const proc = spawn(resolveClaudeBin(), args, {
+    const proc = spawn(resolveClaudeBin(), args, { windowsHide: true,
       env: env as NodeJS.ProcessEnv,
       cwd: CLAUDE_DIR, // pins the transcript to the -Users-…--claude project dir
       stdio: ["pipe", "pipe", "pipe"],

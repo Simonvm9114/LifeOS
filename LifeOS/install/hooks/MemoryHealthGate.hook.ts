@@ -23,7 +23,7 @@ const HOME = process.env.HOME ?? process.env.USERPROFILE ?? homedir();
 const CHECK = lifeosPath("TOOLS", "MemoryHealthCheck.ts");
 
 try {
-  const out = execFileSync("bun", [CHECK], {
+  const out = execFileSync("bun", [CHECK], { windowsHide: true,
     timeout: 5000,
     encoding: "utf-8",
     stdio: ["ignore", "pipe", "pipe"],

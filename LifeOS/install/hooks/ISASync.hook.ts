@@ -277,7 +277,7 @@ async function main(input: any): Promise<string | null> {
   if (newPhase === 'COMPLETE' && oldPhase !== 'COMPLETE' && fm.slug) {
     try {
       const isaRender = lifeosPath('TOOLS', 'ISARender.ts');
-      const proc = spawn('bun', [isaRender, isaPath], {
+      const proc = spawn('bun', [isaRender, isaPath], { windowsHide: true,
         detached: true,
         stdio: 'ignore',
       });

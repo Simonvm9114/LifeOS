@@ -506,7 +506,7 @@ async function inferenceAttempt(options: InferenceOptions, modelOverride?: strin
     // child only PATH and HOME, and then every call answers "Not logged in" (a scheduled judge call
     // can fail this way on its first run).
     // os.userInfo() reports "unknown" when USER is unset under bun, so ask the system for the uid's name.
-    if (!env.USER) env.USER = spawnSync("id", ["-un"], { encoding: "utf8" }).stdout.trim() || undefined;
+    if (!env.USER) env.USER = spawnSync("id", ["-un"], { windowsHide: true, encoding: "utf8" }).stdout.trim() || undefined;
 
     let imagePlan: ImageInputPlan | null = null;
     if (options.imagePaths && options.imagePaths.length > 0) {
@@ -566,7 +566,7 @@ async function inferenceAttempt(options: InferenceOptions, modelOverride?: strin
     // public issue #2057 (@cammcd): resolveClaudeBin returns the real claude.exe
     // behind npm's claude.cmd shim, so this spawn stays shell-free on Windows.
     const claudeBin = resolveClaudeBin();
-    const proc = spawn(claudeBin, args, {
+    const proc = spawn(claudeBin, args, { windowsHide: true,
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -857,7 +857,7 @@ export async function runCodexOnSubscription(prompt: string, model: string, time
     const finalFile = join(home, "final.txt");
     const env: Record<string, string | undefined> = { ...process.env, CODEX_HOME: home };
     for (const k of Object.keys(env)) if (k.startsWith("OPENAI_API_KEY") || k === "OPENAI_BASE_URL") delete env[k];
-    const proc = Bun.spawn(codexInferenceArgv(codex, model, finalFile, work, images.map((i) => resolvePath(i)), effort), { stdin: new Blob([prompt]), stdout: "ignore", stderr: "pipe", env });
+    const proc = Bun.spawn(codexInferenceArgv(codex, model, finalFile, work, images.map((i) => resolvePath(i)), effort), { windowsHide: true, stdin: new Blob([prompt]), stdout: "ignore", stderr: "pipe", env });
     const timer = setTimeout(() => proc.kill(), timeoutMs);
     const onAbort = () => proc.kill();
     signal?.addEventListener("abort", onAbort, { once: true });

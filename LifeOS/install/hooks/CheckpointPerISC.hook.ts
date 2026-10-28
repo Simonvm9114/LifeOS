@@ -103,7 +103,7 @@ export function saveState(stateFile: string, state: CheckpointState, allowedRoot
 }
 
 function gitRun(repo: string, args: string[]): string {
-  return execFileSync('git', ['-C', repo, ...args], {
+  return execFileSync('git', ['-C', repo, ...args], { windowsHide: true,
     encoding: 'utf-8',
     timeout: GIT_TIMEOUT_MS,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -283,7 +283,7 @@ export function candidatePaths(repo: string, isaPath: string, sidecar: string, m
 }
 
 function gitIn(repo: string, args: string[], env: NodeJS.ProcessEnv): string {
-  return execFileSync('git', ['-C', repo, ...args], {
+  return execFileSync('git', ['-C', repo, ...args], { windowsHide: true,
     encoding: 'utf-8',
     timeout: GIT_TIMEOUT_MS,
     stdio: ['ignore', 'pipe', 'pipe'],

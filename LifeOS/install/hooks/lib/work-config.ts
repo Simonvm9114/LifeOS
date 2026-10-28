@@ -267,7 +267,7 @@ function revalidatePrivate(repo: string): RevalidateResult {
     // Bun's spawnSync — fast, no async required from the loader.
     const proc = Bun.spawnSync(
       ["gh", "repo", "view", repo, "--json", "visibility,isPrivate"],
-      { stdout: "pipe", stderr: "pipe", timeout: 8000 },
+      { windowsHide: true, stdout: "pipe", stderr: "pipe", timeout: 8000 },
     );
     if (!proc || proc.exitCode !== 0) {
       return { ok: false, reason: `gh exit ${proc?.exitCode ?? "unknown"}` };

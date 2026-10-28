@@ -553,7 +553,7 @@ function gitRead(dir: string | null, args: string[]): string | null {
   env.GIT_TERMINAL_PROMPT = "0";
   let out: string | null = null;
   try {
-    const r = spawnSync("git", [...(dir ? ["-C", dir] : []), "--no-pager", ...args], { cwd: dir ?? "/", env, encoding: "utf-8", timeout: 3000, stdio: ["ignore", "pipe", "ignore"] });
+    const r = spawnSync("git", [...(dir ? ["-C", dir] : []), "--no-pager", ...args], { windowsHide: true, cwd: dir ?? "/", env, encoding: "utf-8", timeout: 3000, stdio: ["ignore", "pipe", "ignore"] });
     out = r.status === 0 && typeof r.stdout === "string" ? r.stdout : null;
   } catch { out = null; }
   gitMemo.set(key, out);

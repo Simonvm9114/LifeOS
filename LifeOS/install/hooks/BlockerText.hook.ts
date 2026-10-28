@@ -53,7 +53,7 @@ function emitLive(text: string, key: string): void {
   try {
     const file = join(dir, "text.txt");
     writeFileSync(file, text, { mode: 0o600 });
-    execFileSync("bun", [VIGIL, "emit", "--text-file", file, "--source", "blocker-text", "--class", "decision", "--key", key, "--now"], { stdio: "ignore", timeout: 60_000 });
+    execFileSync("bun", [VIGIL, "emit", "--text-file", file, "--source", "blocker-text", "--class", "decision", "--key", key, "--now"], { windowsHide: true, stdio: "ignore", timeout: 60_000 });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
       try {
         const file = join(dir, "text.txt");
         writeFileSync(file, text, { mode: 0o600 });
-        execFileSync("bun", [VIGIL, "emit", "--text-file", file, "--source", "followups", "--class", "prep", "--key", `followup:blocker-text-dry-run:${new Date().toISOString().slice(0, 10)}`], { stdio: "ignore", timeout: 60_000 });
+        execFileSync("bun", [VIGIL, "emit", "--text-file", file, "--source", "followups", "--class", "prep", "--key", `followup:blocker-text-dry-run:${new Date().toISOString().slice(0, 10)}`], { windowsHide: true, stdio: "ignore", timeout: 60_000 });
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }

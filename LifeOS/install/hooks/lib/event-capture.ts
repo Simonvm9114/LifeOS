@@ -53,10 +53,10 @@ const BASH_TOOLS = new Set(['Bash']);
 
 function gitSnapshot(cwd: string): { head?: string; dirty?: boolean } | undefined {
   try {
-    const head = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+    const head = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { windowsHide: true,
       cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 500,
     }).trim();
-    const status = execFileSync('git', ['status', '--porcelain'], {
+    const status = execFileSync('git', ['status', '--porcelain'], { windowsHide: true,
       cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 500,
     });
     return { head, dirty: status.trim().length > 0 };

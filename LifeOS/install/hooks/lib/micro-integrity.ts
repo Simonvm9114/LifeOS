@@ -64,7 +64,7 @@ const readOr = (p: string): string | null => { try { return readFileSync(p, "utf
 const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 function run(cmd: string, args: string[], cwd: string): { code: number; out: string } {
-  const r = Bun.spawnSync([cmd, ...args], { cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
+  const r = Bun.spawnSync([cmd, ...args], { windowsHide: true, cwd, stdout: "pipe", stderr: "pipe", env: { ...process.env, GIT_OPTIONAL_LOCKS: "0" } });
   return { code: r.exitCode ?? 1, out: r.stdout.toString() };
 }
 

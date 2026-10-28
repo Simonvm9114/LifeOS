@@ -61,7 +61,7 @@ let kittenBinCached: string | null = null;
 function kittenBin(): string {
   if (kittenBinCached) return kittenBinCached;
   try {
-    const path = execSync('command -v kitten', { encoding: 'utf-8', timeout: 1000 }).trim();
+    const path = execSync('command -v kitten', { windowsHide: true, encoding: 'utf-8', timeout: 1000 }).trim();
     if (path) { kittenBinCached = path; return path; }
   } catch { /* fall through */ }
   kittenBinCached = '/Applications/kitty.app/Contents/MacOS/kitten';
@@ -183,7 +183,7 @@ function cleanupStaleStateFiles(): void {
     if (!/^[a-zA-Z0-9_\-]+:[a-zA-Z0-9/_\-.]+$/.test(socketPath)) return;
     let rawLs: string;
     try {
-      rawLs = execFileSync('kitten', ['@', `--to=${socketPath}`, 'ls'], {
+      rawLs = execFileSync('kitten', ['@', `--to=${socketPath}`, 'ls'], { windowsHide: true,
         encoding: 'utf-8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'],
       }).trim();
     } catch { return; }
@@ -268,8 +268,8 @@ export function setTabState(opts: SetTabOptions): void {
       ? ['@', toArg, 'set-window-title', winMatch, title]
       : ['@', toArg, 'set-window-title', title];
     // Argument arrays, never a shell string: GHSA-pv2m-jc3r-32fw, @Nosferatuvjr @turnerlk
-    execFileSync(kitten, titleArgs, { stdio: 'ignore', timeout: 2000 });
-    execFileSync(kitten, winTitleArgs, { stdio: 'ignore', timeout: 2000 });
+    execFileSync(kitten, titleArgs, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
+    execFileSync(kitten, winTitleArgs, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
 
     // set-tab-color is a TAB command: match the tab holding our window, or fall
     // back to --self when called from the tab's own process (no windowId resolved).
@@ -277,7 +277,7 @@ export function setTabState(opts: SetTabOptions): void {
     const colorArgs = state === 'idle'
       ? ['@', toArg, 'set-tab-color', colorTargetArg, 'active_bg=none', 'active_fg=none', 'inactive_bg=none', 'inactive_fg=none']
       : ['@', toArg, 'set-tab-color', colorTargetArg, `active_bg=${ACTIVE_TAB_BG}`, `active_fg=${ACTIVE_TAB_FG}`, `inactive_bg=${colors.inactiveBg}`, `inactive_fg=${colors.inactiveFg}`];
-    execFileSync(kitten, colorArgs, { stdio: 'ignore', timeout: 2000 });
+    execFileSync(kitten, colorArgs, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
     console.error(`[tab-setter] Tab commands completed successfully`);
   } catch (err) {
     console.error(`[tab-setter] Error setting tab:`, err);
@@ -702,13 +702,13 @@ export function setAscentTab(state: AscentState, sessionId: string, summary?: st
       ? ['@', toArg, 'set-window-title', winMatch, title]
       : ['@', toArg, 'set-window-title', title];
     // Argument arrays, never a shell string: GHSA-pv2m-jc3r-32fw, @Nosferatuvjr @turnerlk
-    execFileSync(kitten, titleArgs, { stdio: 'ignore', timeout: 2000 });
-    execFileSync(kitten, winTitleArgs, { stdio: 'ignore', timeout: 2000 });
+    execFileSync(kitten, titleArgs, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
+    execFileSync(kitten, winTitleArgs, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
 
     const colorArgs = state === 'idle'
       ? ['@', toArg, 'set-tab-color', colorTargetArg, 'active_bg=none', 'active_fg=none', 'inactive_bg=none', 'inactive_fg=none']
       : ['@', toArg, 'set-tab-color', colorTargetArg, `active_bg=${ACTIVE_TAB_BG}`, `active_fg=${ACTIVE_TAB_FG}`, `inactive_bg=${config.tabBg}`, `inactive_fg=${config.tabFg}`];
-    execFileSync(kitten, colorArgs, { stdio: 'ignore', timeout: 2000 });
+    execFileSync(kitten, colorArgs, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
     console.error(`[tab-setter] Ascent tab: "${title}" (${state}, bg=${config.tabBg})`);
   } catch (err) {
     console.error(`[tab-setter] Error setting ascent tab:`, err);

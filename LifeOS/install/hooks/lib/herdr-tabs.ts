@@ -145,7 +145,7 @@ function herdrBin(): string {
 }
 
 function herdrJson(args: string[]): any {
-  const raw = execFileSync(herdrBin(), args, { encoding: 'utf-8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] });
+  const raw = execFileSync(herdrBin(), args, { windowsHide: true, encoding: 'utf-8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] });
   return JSON.parse(raw).result;
 }
 
@@ -199,23 +199,23 @@ export function writeHerdrTab(title: string, sessionName?: string | null): boole
     // `{glyph} {SESSION LABEL}`, the tab takes the description. A pane that does not
     // own the workspace keeps the whole title on its tab.
     const { head, tabLabel } = herdrTabLabels(label, ownsWorkspace);
-    execFileSync(herdrBin(), ['tab', 'rename', tabId, tabLabel], { stdio: 'ignore', timeout: 2000 });
+    execFileSync(herdrBin(), ['tab', 'rename', tabId, tabLabel], { windowsHide: true, stdio: 'ignore', timeout: 2000 });
     if (ownsWorkspace) {
       // The space row gets the longer name when the session has one, led by the kind of
       // work rather than the run-state glyph (herdr's state icon already says the state).
       const { line1, line2 } = spaceLabelLines(sessionName);
-      execFileSync(herdrBin(), ['workspace', 'rename', workspaceId, spaceRowName(sessionName, head)], { stdio: 'ignore', timeout: 2000 });
+      execFileSync(herdrBin(), ['workspace', 'rename', workspaceId, spaceRowName(sessionName, head)], { windowsHide: true, stdio: 'ignore', timeout: 2000 });
       // The spaces row shows the WORK, and which codebase it is in is the one fact that
       // differs between sessions once the git branch is gone. Line two rides plain `$name2`;
       // lineTwoTokens still clears the per-state variants older rows were painted with.
       const lineTwo = herdrReportArgs('workspace', workspaceId, {
         ...lineTwoTokens('', line1 ? line2 : ''), project: workspaceProject(),
       });
-      if (lineTwo) execFileSync(herdrBin(), lineTwo, { stdio: 'ignore', timeout: 2000 });
+      if (lineTwo) execFileSync(herdrBin(), lineTwo, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
       // The kind symbol now leads the label itself; clear the `$kind_*` tokens older rows
       // carry. Its own report: with line two it would pass herdr's 16-token cap.
       const kind = herdrReportArgs('workspace', workspaceId, Object.fromEntries(Object.keys(kindTokens('')).map((k) => [k, null])));
-      if (kind) execFileSync(herdrBin(), kind, { stdio: 'ignore', timeout: 2000 });
+      if (kind) execFileSync(herdrBin(), kind, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
     }
     // The agents row carries no session name: the space row above it already does. A second
     // session sharing a workspace has no space row of its own, so its name rides on `$session`.
@@ -320,7 +320,7 @@ export function reportHerdrMetadata(
       args.length > 5 && args.every(a => typeof a === 'string' && a.length > 0),
       `herdr report argv is malformed for ${scope} ${targetId}`,
     );
-    execFileSync(herdrBin(), args, { stdio: 'ignore', timeout: 2000 });
+    execFileSync(herdrBin(), args, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
     return true;
   } catch (err) {
     if (err instanceof InvariantViolation) throw err;
@@ -387,11 +387,11 @@ function sendStateLabels(labels: Partial<Record<HerdrStatus, string>>, detach = 
   if (!args) return false;
   try {
     if (detach) {
-      const child = spawn(herdrBin(), args, { detached: true, stdio: 'ignore' });
+      const child = spawn(herdrBin(), args, { windowsHide: true, detached: true, stdio: 'ignore' });
       child.on('error', () => { /* herdr absent */ });
       child.unref();
     } else {
-      execFileSync(herdrBin(), args, { stdio: 'ignore', timeout: 2000 });
+      execFileSync(herdrBin(), args, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
     }
     return true;
   } catch (err) {
@@ -600,7 +600,7 @@ function startWait(reason: 'blocked' | 'question'): void {
   if (ws && shown) {
     const args = herdrReportArgs('workspace', ws, stateTokens({ kind: shown.tier, label: shown.label }));
     if (args) {
-      try { execFileSync(herdrBin(), args, { stdio: 'ignore', timeout: 2000 }); mark.waitShown = shown.label; }
+      try { execFileSync(herdrBin(), args, { windowsHide: true, stdio: 'ignore', timeout: 2000 }); mark.waitShown = shown.label; }
       catch (err) { console.error('[herdr-tabs] wait report failed:', err); }
     }
   }
@@ -626,7 +626,7 @@ export function clearHerdrWait(): boolean {
 
 function detachedReport(args: string[] | null): void {
   if (!args) return;
-  const child = spawn(herdrBin(), args, { detached: true, stdio: 'ignore' });
+  const child = spawn(herdrBin(), args, { windowsHide: true, detached: true, stdio: 'ignore' });
   child.on('error', () => { /* herdr absent */ });
   child.unref();
 }
@@ -686,7 +686,7 @@ export function herdrTurnDir(lifeosRoot: string): string {
 function defaultWaitReport(ws: string, tokens: HerdrTokens): boolean {
   const args = herdrReportArgs('workspace', ws, tokens);
   if (!args) return false;
-  try { execFileSync(herdrBin(), args, { stdio: 'ignore', timeout: 2000 }); return true; } catch { return false; }
+  try { execFileSync(herdrBin(), args, { windowsHide: true, stdio: 'ignore', timeout: 2000 }); return true; } catch { return false; }
 }
 
 // ── Progress bar (2026-10-15) ────────────────────────────────────────────────
@@ -888,7 +888,7 @@ export function syncHerdrWorkers(paneId: string, shown: string, dir = WORKERS_DI
     const live = agentsLabel(liveWorkers(`herdr-${paneId.replace(':', '-')}`, dir));
     if (live === shown.trim()) return live;
     const args = herdrReportArgs('pane', paneId, { workers: live });
-    if (args) execFileSync(herdrBin(), args, { stdio: 'ignore', timeout: 2000 });
+    if (args) execFileSync(herdrBin(), args, { windowsHide: true, stdio: 'ignore', timeout: 2000 });
     return live;
   } catch (err) {
     console.error(`[herdr-tabs] worker sync failed:`, err);
@@ -938,7 +938,7 @@ export function reportHerdrDoing(toolName: string, toolInput: Record<string, unk
   try {
     const args = herdrReportArgs('pane', pane, { doing: doingLabel(toolName, toolInput) }, { ttlMs: DOING_TTL_MS });
     if (!args) return false;
-    const child = spawn(herdrBin(), args, { detached: true, stdio: 'ignore' });
+    const child = spawn(herdrBin(), args, { windowsHide: true, detached: true, stdio: 'ignore' });
     child.on('error', () => { /* herdr absent: the row simply shows no action */ });
     child.unref();
     // A turn resumed by a background-task notification never ran the prompt hook, so the

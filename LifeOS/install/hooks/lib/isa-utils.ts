@@ -594,7 +594,7 @@ export function agentsFromEvents(raw: string, sessionUUID: string): AgentEntry[]
 }
 
 export function readAgentEventTail(eventsPath: string, spawnSync = Bun.spawnSync): string {
-  const result = spawnSync(["tail", "-200", eventsPath], { stdout: "pipe", stderr: "pipe", timeout: 3000 });
+  const result = spawnSync(["tail", "-200", eventsPath], { windowsHide: true, stdout: "pipe", stderr: "pipe", timeout: 3000 });
   if (result.exitCode !== 0) throw new Error(`tail exited ${result.exitCode}`);
   return result.stdout.toString();
 }

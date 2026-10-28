@@ -151,7 +151,7 @@ function main(): void {
       continue;
     }
     try {
-      const proc = spawn('bun', [ISA_RENDER, isaPath], {
+      const proc = spawn('bun', [ISA_RENDER, isaPath], { windowsHide: true,
         detached: true,
         stdio: 'ignore',
       });

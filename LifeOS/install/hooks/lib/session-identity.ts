@@ -133,7 +133,7 @@ function findSessionJsonl(sessionId: string): string | null {
   try {
     for (const dir of [join(getClaudeDir(), 'projects'), join(getClaudeDir(), 'Projects')]) {
       if (!existsSync(dir)) continue;
-      const r = Bun.spawnSync(['find', dir, '-maxdepth', '2', '-name', `${sessionId}.jsonl`], { stdout: 'pipe', stderr: 'pipe', timeout: 2000 });
+      const r = Bun.spawnSync(['find', dir, '-maxdepth', '2', '-name', `${sessionId}.jsonl`], { windowsHide: true, stdout: 'pipe', stderr: 'pipe', timeout: 2000 });
       const p = r.stdout.toString().trim().split('\n')[0];
       if (p && existsSync(p)) return p;
     }
@@ -425,7 +425,7 @@ interface LiveTab { windowId: string; title: string; sessionId: string }
 function liveKittyTabs(): LiveTab[] {
   const out: LiveTab[] = [];
   try {
-    const ls = Bun.spawnSync(['kitty', '@', 'ls'], { stdout: 'pipe', stderr: 'pipe', timeout: 3000 });
+    const ls = Bun.spawnSync(['kitty', '@', 'ls'], { windowsHide: true, stdout: 'pipe', stderr: 'pipe', timeout: 3000 });
     if (ls.exitCode !== 0) return out;
     const titleByWindow: Record<string, string> = {};
     for (const os of JSON.parse(ls.stdout.toString())) for (const t of os.tabs) for (const w of t.windows) titleByWindow[String(w.id)] = t.title;

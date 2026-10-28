@@ -306,7 +306,7 @@ function handlePostToolUse(raw: string): StatvsWork | null {
         // this sync try/catch — so it was swallowed, WorkReconcile never wrote
         // its state file, and `due` stayed true on every single tool call.
         // (ported from public PR #1738, @elhoim)
-        const proc = spawn(resolveBun(), [lifeosPath('TOOLS', 'WorkReconcile.ts')], {
+        const proc = spawn(resolveBun(), [lifeosPath('TOOLS', 'WorkReconcile.ts')], { windowsHide: true,
           detached: true,
           stdio: 'ignore',
         });

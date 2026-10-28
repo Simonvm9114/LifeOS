@@ -142,7 +142,7 @@ function spawnIntegrityMaintenance(
     // a log fd lets the hook return at once (public issue #2210, @corobis).
     const inputPath = writeIntegrityInput(inputData, hookInput.session_id ?? '');
     const logFd = openIntegrityLog();
-    const child = spawn('bun', [INTEGRITY_SCRIPT, '--input', inputPath], {
+    const child = spawn('bun', [INTEGRITY_SCRIPT, '--input', inputPath], { windowsHide: true,
       detached: true,
       stdio: ['ignore', logFd ?? 'ignore', logFd ?? 'ignore'],
       env: { ...process.env },

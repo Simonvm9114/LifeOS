@@ -699,7 +699,7 @@ function loadIndex(): SkillIndex | null {
   const bun = resolveBun();
   try {
     Bun.spawn([bun, import.meta.path, '--rebuild-index'],
-      { stdin: 'ignore', stdout: 'ignore', stderr: 'ignore' }).unref();
+      { windowsHide: true, stdin: 'ignore', stdout: 'ignore', stderr: 'ignore' }).unref();
   } catch (e) {
     // Never block the turn, but never swallow silently either — a failed
     // self-heal must leave a trace something can see.

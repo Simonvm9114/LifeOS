@@ -36,7 +36,7 @@ async function refreshUsageCache(lifeosDir: string): Promise<void> {
     if (process.platform === 'darwin') {
       credJson = execSync(
         'security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null',
-        { encoding: 'utf-8', timeout: 3000 }
+        { windowsHide: true, encoding: 'utf-8', timeout: 3000 }
       ).trim();
     } else {
       const credPath = join(getClaudeDir(), '.credentials.json');

@@ -25,7 +25,7 @@ export function machineIdleMinutes(): number | null {
 /** The keyboard and mouse reading itself, never the replay override: what a record of the turn must hold. */
 export function hardwareIdleMinutes(): number | null {
   if (process.platform !== "darwin") return null;
-  const r = spawnSync("ioreg", ["-c", "IOHIDSystem"], { encoding: "utf8", timeout: 2000 });
+  const r = spawnSync("ioreg", ["-c", "IOHIDSystem"], { windowsHide: true, encoding: "utf8", timeout: 2000 });
   const m = /"HIDIdleTime"\s*=\s*(\d+)/.exec(r.stdout ?? "");
   return m ? Math.floor(Number(m[1]) / 1e9 / 60) : null;
 }

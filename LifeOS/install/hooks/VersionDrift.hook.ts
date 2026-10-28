@@ -42,7 +42,7 @@ const NAG_INTERVAL_MIN = 60;
 // Every entry is a git pathspec, so the diff below selects exactly isCorePath()'s files.
 function git(args: string[]): string {
   try {
-    return execFileSync("git", ["-C", CLAUDE_DIR, ...args], {
+    return execFileSync("git", ["-C", CLAUDE_DIR, ...args], { windowsHide: true,
       encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], maxBuffer: 64 * 1024 * 1024, timeout: 3000,
     }).trim();
   } catch { return ""; }

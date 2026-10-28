@@ -84,7 +84,7 @@ export function livePresence(): Presence | null {
 
 /** One `share` upload. The child is killed when the signal fires, so no upload outlives the hook. */
 async function shareUpload(path: string, signal?: AbortSignal): Promise<string> {
-  const proc = Bun.spawn(["share", path], { stdin: "ignore", stdout: "pipe", stderr: "pipe", signal });
+  const proc = Bun.spawn(["share", path], { windowsHide: true, stdin: "ignore", stdout: "pipe", stderr: "pipe", signal });
   const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
   if (code !== 0) throw new Error(signal?.aborted ? "aborted" : `share exited ${code}`);
   const url = /https:\/\/\S+/.exec(out)?.[0];

@@ -318,7 +318,7 @@ function spawnReviewer(turnsReviewed: number, transcriptPath: string | null): { 
     delete env.ANTHROPIC_API_KEY;
     delete env.ANTHROPIC_AUTH_TOKEN;
     delete env.CLAUDECODE;
-    const proc = spawn("bun", reviewerArgs(turnsReviewed, transcriptPath), {
+    const proc = spawn("bun", reviewerArgs(turnsReviewed, transcriptPath), { windowsHide: true,
       env,
       stdio: "ignore",
       detached: true,

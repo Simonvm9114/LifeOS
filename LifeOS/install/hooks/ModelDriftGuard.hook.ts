@@ -206,7 +206,7 @@ function triggerRegistrySync(model: string | null | undefined): void {
     mkdirSync(join(LIFEOS_DIR, "MEMORY", "STATE"), { recursive: true });
     appendFileSync(SYNC_STAMP, `${new Date().toISOString()} served=${model}\n`);
     log({ event: "registry-behind", model, registry: current });
-    const child = Bun.spawn(["bun", join(LIFEOS_DIR, "TOOLS", "ModelSync.ts"), "--sync"], { stdout: "ignore", stderr: "ignore", stdin: "ignore" });
+    const child = Bun.spawn(["bun", join(LIFEOS_DIR, "TOOLS", "ModelSync.ts"), "--sync"], { windowsHide: true, stdout: "ignore", stderr: "ignore", stdin: "ignore" });
     child.unref();
   } catch { /* never worth failing a prompt over */ }
 }

@@ -19,11 +19,11 @@ function target(sessionId?:string):string|null {
   if(id&&valid(id))return id;
   const pane=process.env.TMUX_PANE||'';
   if(!/^%\d+$/.test(pane))return remembered(sessionId);
-  try {const name=execFileSync(bin,['-L','pulse-desktop','display-message','-p','-t',pane,'#{session_name}'],{encoding:'utf8',timeout:1000}).trim();return valid(name)?name:null;}catch{return null;}
+  try {const name=execFileSync(bin,['-L','pulse-desktop','display-message','-p','-t',pane,'#{session_name}'],{ windowsHide: true,encoding:'utf8',timeout:1000}).trim();return valid(name)?name:null;}catch{return null;}
 }
 export function readPulseTab(sessionId?:string):any {
   const id=target(sessionId);if(!id)return null;
-  try{return JSON.parse(execFileSync(binary()!,['-L','pulse-desktop','show-option','-v','-t',id,'@pulse-decoration'],{encoding:'utf8',timeout:1000,stdio:['ignore','pipe','ignore']}));}catch{return null;}
+  try{return JSON.parse(execFileSync(binary()!,['-L','pulse-desktop','show-option','-v','-t',id,'@pulse-decoration'],{ windowsHide: true,encoding:'utf8',timeout:1000,stdio:['ignore','pipe','ignore']}));}catch{return null;}
 }
 export function writePulseTab(data:Record<string,unknown>,sessionId?:string):boolean {
   if(!isPulseTerminal(sessionId))return false;
@@ -46,13 +46,13 @@ export function writePulseTab(data:Record<string,unknown>,sessionId?:string):boo
     if(sessionId&&process.env.LIFEOS_HARNESS==='codex'){
       if(previous?.codexThreadId===sessionId){normalized.sessionName=previous.sessionName;normalized.codexThreadId=sessionId;normalized.nameCheckedAt=previous.nameCheckedAt;}
       if(previous?.codexThreadId!==sessionId||Date.now()-Number(previous?.nameCheckedAt||0)>60000)try{
-        const result=JSON.parse(execFileSync('bun',[lifeosPath('CODEX','SessionTitle.ts'),sessionId,'--uppercase'],{encoding:'utf8',timeout:3500,stdio:['ignore','pipe','ignore']}));
+        const result=JSON.parse(execFileSync('bun',[lifeosPath('CODEX','SessionTitle.ts'),sessionId,'--uppercase'],{ windowsHide: true,encoding:'utf8',timeout:3500,stdio:['ignore','pipe','ignore']}));
         if(typeof result.name==='string'&&result.name.trim()){normalized.sessionName=result.name;normalized.codexThreadId=sessionId;}
       }catch{/* Preserve last known name while Codex is unavailable. */}
       finally{normalized.nameCheckedAt=Date.now();normalized.codexThreadId=sessionId;}
     }
     for(const key of ['title','previousTitle'])if(typeof normalized[key]==='string')normalized[key]=pulseSessionTitle(normalized[key] as string);
-    execFileSync(binary()!,['-L','pulse-desktop','set-option','-t',id,'@pulse-decoration',JSON.stringify(normalized)],{timeout:1000,stdio:'ignore'});
+    execFileSync(binary()!,['-L','pulse-desktop','set-option','-t',id,'@pulse-decoration',JSON.stringify(normalized)],{ windowsHide: true,timeout:1000,stdio:'ignore'});
     const path=mapping(sessionId);if(path){mkdirSync(lifeosPath('MEMORY','STATE','pulse-sessions'),{recursive:true});const temp=path+'.'+process.pid+'.tmp';writeFileSync(temp,JSON.stringify({terminalId:id}),{mode:0o600});renameSync(temp,path);}
   }catch{}
   return true;
