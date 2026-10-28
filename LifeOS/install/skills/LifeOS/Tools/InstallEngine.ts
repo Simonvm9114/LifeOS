@@ -1082,7 +1082,7 @@ export function initConfigRootRepo(configRoot: string): UserRepoResult {
 function initLocalRepo(path: string, seedGitignore: string, commitMessage: string): UserRepoResult {
   if (!existsSync(path)) return { action: "skipped", path, reason: "directory does not exist", gitignore: "not-written" };
 
-  if (!tryExec("command -v git")) {
+  if (!findBin("git")) {
     // Non-fatal by contract: the boundary is the symlinks, and those are already
     // established. Record the degradation and let the install finish.
     return { action: "skipped", path, reason: "git not found on PATH", gitignore: "not-written" };
