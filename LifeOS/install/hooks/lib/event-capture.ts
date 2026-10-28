@@ -124,10 +124,14 @@ export function appendPrivateLine(filePath: string, record: unknown): void {
 }
 
 const PRIVATE_DIR_MODE = 0o700;
+// Windows has no POSIX mode bits (stat always reports 0666), so the owner-only checks only hold
+// elsewhere; there the profile directory's ACL keeps these records private.
+const POSIX_MODES = process.platform !== 'win32';
 
 /** Create `dir` (and parents) 0700, and strip group/other bits from an existing `dir`. */
 export function ensurePrivateDir(dir: string): void {
   mkdirSync(dir, { recursive: true, mode: PRIVATE_DIR_MODE });
+  if (!POSIX_MODES) return;
   const mode = statSync(dir).mode & 0o777;
   if (mode & 0o077) chmodSync(dir, mode & PRIVATE_DIR_MODE);
   invariant((statSync(dir).mode & 0o077) === 0, 'private record directory is owner-only');
@@ -138,7 +142,7 @@ export function ensurePrivateDir(dir: string): void {
 export function appendPrivateRecord(filePath: string, record: unknown): void {
   ensurePrivateDir(dirname(filePath));
   appendPrivateLine(filePath, record);
-  invariant((statSync(filePath).mode & 0o777) === PRIVATE_MODE, 'private record file is 0600');
+  invariant(!POSIX_MODES || (statSync(filePath).mode & 0o777) === PRIVATE_MODE, 'private record file is 0600');
 }
 
 // ── Settings snapshot diff (ConfigChange) ─────────────────────────────────

@@ -320,7 +320,8 @@ async function cmdSet(key: string | undefined): Promise<void> {
   invariant([...namesBefore].every((n) => namesAfter.includes(n)), "setting one key must keep every other key");
   mkdirSync(dirname(target), { recursive: true });
   writeAtomic(target, after, 0o600);
-  invariant((statSync(target).mode & 0o777) === 0o600, ".env must be mode 0600 after set");
+  // Windows has no POSIX mode bits (stat always reports 0666); the profile ACL guards .env there.
+  invariant(process.platform === "win32" || (statSync(target).mode & 0o777) === 0o600, ".env must be mode 0600 after set");
   console.log(`✓ set ${key} in ${ENV_PATH} (mode 600; value not shown)`);
 
   // Reseal whenever this machine seals; a machine that never set up sealing is told how, not failed.

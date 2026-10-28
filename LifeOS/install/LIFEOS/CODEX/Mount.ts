@@ -439,6 +439,8 @@ export function stepState(ctx: Ctx, changes: Change[]): void {
   const dir = ctx.stateDir;
   if (!existsSync(dir)) { changes.push({ step: "state", what: "mkdir", detail: `${dir} (0700)` }); if (!ctx.check) mkdirSync(dir, { recursive: true, mode: 0o700 }); }
   if (!existsSync(dir)) return;
+  // Windows has no POSIX mode bits (stat always reports 0666), so every check would report drift there.
+  if (process.platform === "win32") return;
   const mode = statSync(dir).mode & 0o777;
   if (mode !== 0o700) { changes.push({ step: "state", what: "chmod", detail: `${dir} ${mode.toString(8)} → 700` }); if (!ctx.check) chmodSync(dir, 0o700); }
   for (const f of readdirSync(dir)) {

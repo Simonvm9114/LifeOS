@@ -29,7 +29,8 @@ interface ChunkInfo {
 export function makeChunkDir(base: string = tmpdir()): string {
   const dir = mkdtempSync(join(base, "transcript-"));
   chmodSync(dir, 0o700);
-  invariant((lstatSync(dir).mode & 0o777) === 0o700, `chunk dir ${dir} is not owner-only`);
+  // Windows has no POSIX mode bits (stat always reports 0666); mkdtemp under the user's own temp dir is private there.
+  invariant(process.platform === "win32" || (lstatSync(dir).mode & 0o777) === 0o700, `chunk dir ${dir} is not owner-only`);
   return dir;
 }
 

@@ -50,7 +50,8 @@ export function cacheDir(...name: string[]): string {
     if (uid !== undefined && st.uid !== uid) throw new Error(`cacheDir: ${cur} belongs to uid ${st.uid}, not ${uid}; refusing a private cache there`);
     // Exactly 0700: group/other bits removed AND the owner's rwx restored (a 0500 directory is private
     // but unusable, and every file a caller writes into it would fail).
-    if ((st.mode & 0o7777) !== 0o700) {
+    // Windows has no POSIX mode bits (stat always reports 0666); the profile ACL keeps the cache private there.
+    if (process.platform !== "win32" && (st.mode & 0o7777) !== 0o700) {
       try { chmodSync(cur, 0o700); } catch (e) { throw new Error(`cacheDir: cannot make ${cur} owner-only (${why(e)})`); }
     }
   }
@@ -60,7 +61,7 @@ export function cacheDir(...name: string[]): string {
   try { real = realpathSync(dir); rootReal = realpathSync(root); } catch (e) { throw new Error(`cacheDir: cannot resolve ${dir} (${why(e)})`); }
   if (real !== join(rootReal, ...parts)) throw new Error(`cacheDir: ${dir} resolves to ${real}, outside the checked path; refusing a private cache there`);
   const final = lstatSync(dir);
-  invariant(final.isDirectory() && !final.isSymbolicLink() && (final.mode & 0o777) === 0o700, `cacheDir: ${dir} is not an owner-only directory after setup (mode ${(final.mode & 0o777).toString(8)})`);
+  invariant(final.isDirectory() && !final.isSymbolicLink() && (process.platform === "win32" || (final.mode & 0o777) === 0o700), `cacheDir: ${dir} is not an owner-only directory after setup (mode ${(final.mode & 0o777).toString(8)})`);
   return dir;
 }
 
