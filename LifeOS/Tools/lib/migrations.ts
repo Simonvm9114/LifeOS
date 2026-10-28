@@ -251,5 +251,68 @@ export const telosConsolidate: Migration = {
   },
 };
 
+// ── 8.761.0: OPERATIONAL_RULES.md became OPERATIONAL_PREFERENCES.md ──
+
+const RULES_REL = "CONFIG/OPERATIONAL_RULES.md";
+const PREFS_REL = "CONFIG/OPERATIONAL_PREFERENCES.md";
+
+/**
+ * 7.x loaded the principal's rules from CONFIG/OPERATIONAL_RULES.md; 8.x's CLAUDE.md imports
+ * CONFIG/OPERATIONAL_PREFERENCES.md instead, and ScaffoldUser places a stub there. Without this the
+ * upgrade silently dropped every rule the principal wrote from session context. Their sections come
+ * first in their own order; each shipped heading the file lacks follows with the template's guidance,
+ * since other parts of the system cite those sections by name.
+ */
+export const operationalRulesRename: Migration = {
+  id: "8.761.0-operational-rules-rename",
+  introducedIn: "8.761.0",
+  title: "Move CONFIG/OPERATIONAL_RULES.md into CONFIG/OPERATIONAL_PREFERENCES.md",
+  run(ctx) {
+    const rules = readIf(join(ctx.userDir, RULES_REL));
+    if (rules === null) return { changed: false, notes: ["no OPERATIONAL_RULES.md"] };
+    if (!isUserWritten(rules, null) && splitFrontmatter(rules).fm.provenance === "template") {
+      return { changed: false, notes: ["OPERATIONAL_RULES.md is an unedited template; left in place"] };
+    }
+    const tpl = readIf(ctx.templateDir && join(ctx.templateDir, PREFS_REL));
+    const existing = readIf(join(ctx.userDir, PREFS_REL));
+    const keepExisting = existing !== null && isUserWritten(existing, tpl);
+    const notes: string[] = [];
+
+    const ruleParts = h2Sections(splitFrontmatter(rules).body);
+    const base = keepExisting ? existing! : rules;
+    const fmBlock = keepExisting
+      ? existing!.match(/^---\n[\s\S]*?\n---\n?/)?.[0] ?? ""
+      : `---\nprovenance: customized\nlast_updated: ${ctx.now}\nlast_updated_by: ${operationalRulesRename.id}\nconvention: lifeos-freshness-v1\n---\n`;
+    const parsed = keepExisting ? h2Sections(splitFrontmatter(base).body) : ruleParts;
+    const preamble = parsed.preamble.replace(/OPERATIONAL_RULES\.md/g, "OPERATIONAL_PREFERENCES.md").replace(/\s+$/, "");
+
+    if (keepExisting) {
+      for (const s of ruleParts.sections) {
+        const sec = parsed.sections.find((x) => sameSection(x.key, s.key));
+        if (!sec) { parsed.sections.push(s); notes.push(`added section "${s.title}"`); }
+        else if (!normalize(sec.body).includes(normalize(s.body))) {
+          sec.body = `${sec.body}\n\n<!-- merged from ${RULES_REL} by migration ${operationalRulesRename.id} -->\n${s.body}`;
+          notes.push(`appended to section "${sec.title}"`);
+        }
+      }
+    } else {
+      notes.push(`moved ${ruleParts.sections.length} sections from OPERATIONAL_RULES.md`);
+    }
+    if (tpl) {
+      for (const t of h2Sections(splitFrontmatter(tpl).body).sections) {
+        if (parsed.sections.some((x) => sameSection(x.key, t.key))) continue;
+        parsed.sections.push(t);
+        notes.push(`added shipped section "${t.title}"`);
+      }
+    }
+
+    const result = `${fmBlock}${preamble}\n\n${parsed.sections.map((x) => `## ${x.title}\n\n${x.body.replace(/^\n+/, "")}`.trimEnd()).join("\n\n")}\n`;
+    ctx.effects.write(PREFS_REL, result);
+    ctx.effects.retire(RULES_REL);
+    notes.push(`moved ${RULES_REL} into the backup`);
+    return { changed: true, notes };
+  },
+};
+
 /** The ledger. Append only; never reorder or renumber an id that has shipped. */
-export const MIGRATIONS: readonly Migration[] = [telosConsolidate];
+export const MIGRATIONS: readonly Migration[] = [telosConsolidate, operationalRulesRename];
