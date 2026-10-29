@@ -1045,6 +1045,21 @@ export const CONFIG_ROOT_GITIGNORE_RULES = [
   ".lifeos-overlay-backups/",
   "*.lifeos-backup-*",
   "LifeOS.backup-*/",
+  // Claude Code's own runtime state at the config root: account data, session and
+  // worktree bookkeeping, caches. Anchored with "/" so same-named dirs inside skills stay tracked.
+  "/.claude.json*",
+  "/sessions/",
+  "/state/",
+  "/worktrees/",
+  "/cache/",
+  "/backups/",
+  "/plugins/",
+  "/ide/",
+  "/stats-cache.json",
+  "/mcp-needs-auth-cache.json",
+  "/.last-cleanup",
+  "/.last-update-result.json",
+  "/settings.json.tmp.*",
 ];
 
 /** Append whichever of `rules` the file lacks (exact-line match). Idempotent. */
