@@ -39,6 +39,7 @@ import {
 } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
+import { HAS_POSIX_MODES } from "../TOOLS/Paths";
 import { spawnSync } from "node:child_process";
 import { invariant } from "../TOOLS/Invariant.ts";
 import { renderAgentsMd, sameRender } from "./Render.ts";
@@ -439,6 +440,7 @@ export function stepState(ctx: Ctx, changes: Change[]): void {
   const dir = ctx.stateDir;
   if (!existsSync(dir)) { changes.push({ step: "state", what: "mkdir", detail: `${dir} (0700)` }); if (!ctx.check) mkdirSync(dir, { recursive: true, mode: 0o700 }); }
   if (!existsSync(dir)) return;
+  if (!HAS_POSIX_MODES) return; // Windows: every check would report drift
   const mode = statSync(dir).mode & 0o777;
   if (mode !== 0o700) { changes.push({ step: "state", what: "chmod", detail: `${dir} ${mode.toString(8)} → 700` }); if (!ctx.check) chmodSync(dir, 0o700); }
   for (const f of readdirSync(dir)) {

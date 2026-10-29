@@ -51,7 +51,7 @@ import {
   writeSync,
   appendFileSync,
 } from "node:fs";
-import { getClaudeDir } from "../Paths"; // public issue #1665 @rogdex24, #1584 @ramazanpolat — aliased resolve sites missed by the 09-03 sweep
+import { claudeRel, getClaudeDir } from "../Paths"; // public issue #1665 @rogdex24, #1584 @ramazanpolat — aliased resolve sites missed by the 09-03 sweep
 import { dirname, resolve as pathResolve } from "node:path";
 import { invariant, InvariantViolation } from "../Invariant";
 import { sha256, rowHash, withFileLock, quarantineTornTail as quarantineTail } from "./LedgerCore";
@@ -65,6 +65,14 @@ function root(): string {
 }
 export function ledgerDir(): string {
   return pathResolve(root(), "LIFEOS/MEMORY/LEDGER");
+}
+/**
+ * A row's file key, root-relative. Windows builds before claudeRel wrote absolute keys
+ * (C:\Users\…\.claude\LIFEOS\USER\…); rows are hash-chained and never rewritten, so readers map
+ * them here instead. Undefined when the row names no file.
+ */
+export function rowFile(row: { file?: unknown }): string | undefined {
+  return typeof row.file === "string" ? claudeRel(row.file) : undefined;
 }
 export function eventsPath(): string {
   return pathResolve(ledgerDir(), "cortex-events.jsonl");
@@ -350,8 +358,9 @@ export function foldState(at?: string): FoldState {
       case "memory/set":
       case "memory/restore":
       case "memory/adopt": {
-        if (typeof row.file === "string" && typeof row.content === "string") {
-          state.files.set(row.file, row.content as string);
+        const file = rowFile(row);
+        if (file !== undefined && typeof row.content === "string") {
+          state.files.set(file, row.content as string);
         }
         break;
       }

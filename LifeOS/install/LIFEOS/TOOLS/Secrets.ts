@@ -39,7 +39,7 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 
 import { invariant } from "./Invariant";
-import { getClaudeDir } from "./Paths"; // public issue #1974 @sabo961, PR #1918 @PigLardLord
+import { getClaudeDir, HAS_POSIX_MODES } from "./Paths"; // public issue #1974 @sabo961, PR #1918 @PigLardLord
 
 const ENV_PATH = process.env.LIFEOS_SECRETS_ENV ?? join(getClaudeDir(), ".env");
 const SEALED_PATH = process.env.LIFEOS_SECRETS_SEALED ?? join(getClaudeDir(), ".env.age");
@@ -320,8 +320,8 @@ async function cmdSet(key: string | undefined): Promise<void> {
   invariant([...namesBefore].every((n) => namesAfter.includes(n)), "setting one key must keep every other key");
   mkdirSync(dirname(target), { recursive: true });
   writeAtomic(target, after, 0o600);
-  invariant((statSync(target).mode & 0o777) === 0o600, ".env must be mode 0600 after set");
-  console.log(`✓ set ${key} in ${ENV_PATH} (mode 600; value not shown)`);
+  invariant(!HAS_POSIX_MODES || (statSync(target).mode & 0o777) === 0o600, ".env must be mode 0600 after set");
+  console.log(`✓ set ${key} in ${ENV_PATH} (${HAS_POSIX_MODES ? "mode 600" : "file mode not enforced on Windows"}; value not shown)`);
 
   // Reseal whenever this machine seals; a machine that never set up sealing is told how, not failed.
   if (keychainRead()) { cmdSeal(); return; }

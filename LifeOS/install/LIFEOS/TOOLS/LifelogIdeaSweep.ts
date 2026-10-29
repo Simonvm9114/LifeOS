@@ -59,7 +59,7 @@ import { homedir, tmpdir } from "os";
 import { join } from "path";
 import { appendJsonl, readJson, readJsonl, writeJsonAtomic } from "./TextStore";
 import { renderEmail as renderBranded, cardBlock, T } from "./EmailTemplate.ts";
-import { lifeosPath } from "./Paths";
+import { HAS_POSIX_MODES, lifeosPath } from "./Paths";
 
 const HOME = homedir();
 const IDEAS_PATH = lifeosPath("MEMORY", "STATE", "lifelog-ideas.json");
@@ -557,7 +557,7 @@ export function writePrivateTemp(day: string, html: string, base: string = tmpdi
   const dir = mkdtempSync(join(base, "lifelog-ideas-"));
   chmodSync(dir, 0o700);
   const st = lstatSync(dir);
-  if (!st.isDirectory() || st.isSymbolicLink() || (st.mode & 0o077) !== 0) {
+  if (!st.isDirectory() || st.isSymbolicLink() || (HAS_POSIX_MODES && (st.mode & 0o077) !== 0)) {
     rmSync(dir, { recursive: true, force: true });
     throw new Error("private temp directory is not a private directory; nothing written");
   }

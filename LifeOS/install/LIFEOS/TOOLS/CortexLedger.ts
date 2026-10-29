@@ -32,6 +32,7 @@ import {
   foldState,
   ledgerDir,
   readRows,
+  rowFile,
   sha256,
   LedgerIntegrityError,
 } from "./lib/CortexLedgerCore";
@@ -276,7 +277,7 @@ function cmdProvenance(): number {
     const map: Record<string, { event_id: string; ts: string; session_id?: string; run_id?: string }> = {};
     for (const entry of entries) {
       for (const row of rows) {
-        if (row.kind !== "memory/set" || row.file !== rel) continue;
+        if (row.kind !== "memory/set" || rowFile(row) !== rel) continue;
         const additions = (row.additions as string[] | undefined) ?? [];
         const all = (row.entries as string[] | undefined) ?? [];
         if (additions.includes(entry) || (all.includes(entry) && !(entry in map))) {

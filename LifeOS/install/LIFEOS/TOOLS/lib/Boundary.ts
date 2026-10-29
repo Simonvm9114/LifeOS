@@ -26,6 +26,7 @@ import { randomUUID } from "node:crypto"
 import { hostname } from "node:os"
 import { basename, dirname, isAbsolute, join, parse, sep } from "node:path"
 import { invariant, InvariantViolation } from "../Invariant"
+import { HAS_POSIX_MODES } from "../Paths"
 import {
   isVerificationCode as labelIsVerificationCode,
   redactLabelled,
@@ -162,7 +163,7 @@ export function atomicWrite(path: string, data: string | Uint8Array, opts: Atomi
       let off = 0
       while (off < bytes.length) off += writeSync(fd, bytes, off, bytes.length - off)
       fsyncSync(fd)
-      invariant((fstatSync(fd).mode & 0o777) === mode, `atomicWrite: temp file mode is not 0o${mode.toString(8)}`)
+      invariant(!HAS_POSIX_MODES || (fstatSync(fd).mode & 0o777) === mode, `atomicWrite: temp file mode is not 0o${mode.toString(8)}`)
     } finally {
       closeSync(fd)
     }

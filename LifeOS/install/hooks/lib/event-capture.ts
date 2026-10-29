@@ -19,6 +19,7 @@ import { execFileSync } from 'node:child_process';
 import { dirname } from 'node:path';
 import { isSecretLabel, redactLabelled, redactStructured } from './label-redact';
 import { invariant } from '../../LIFEOS/TOOLS/Invariant';
+import { HAS_POSIX_MODES } from '../../LIFEOS/TOOLS/Paths';
 
 /** Extra text redacted past the cut point before truncating. A token that starts
  * inside the kept window and runs past it is still a shape match on this span,
@@ -128,6 +129,7 @@ const PRIVATE_DIR_MODE = 0o700;
 /** Create `dir` (and parents) 0700, and strip group/other bits from an existing `dir`. */
 export function ensurePrivateDir(dir: string): void {
   mkdirSync(dir, { recursive: true, mode: PRIVATE_DIR_MODE });
+  if (!HAS_POSIX_MODES) return;
   const mode = statSync(dir).mode & 0o777;
   if (mode & 0o077) chmodSync(dir, mode & PRIVATE_DIR_MODE);
   invariant((statSync(dir).mode & 0o077) === 0, 'private record directory is owner-only');
@@ -138,7 +140,7 @@ export function ensurePrivateDir(dir: string): void {
 export function appendPrivateRecord(filePath: string, record: unknown): void {
   ensurePrivateDir(dirname(filePath));
   appendPrivateLine(filePath, record);
-  invariant((statSync(filePath).mode & 0o777) === PRIVATE_MODE, 'private record file is 0600');
+  invariant(!HAS_POSIX_MODES || (statSync(filePath).mode & 0o777) === PRIVATE_MODE, 'private record file is 0600');
 }
 
 // ── Settings snapshot diff (ConfigChange) ─────────────────────────────────

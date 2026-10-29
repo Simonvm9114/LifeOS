@@ -57,10 +57,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { InvariantViolation, invariant } from "./Invariant";
-import { getClaudeDir } from "./Paths"; // public issue #1665 @rogdex24, #1584 @ramazanpolat — aliased resolve sites missed by the 09-03 sweep
+import { claudeRel, getClaudeDir, HAS_POSIX_MODES } from "./Paths"; // public issue #1665 @rogdex24, #1584 @ramazanpolat — aliased resolve sites missed by the 09-03 sweep
 import { spawnSync } from "node:child_process";
-import { dirname, relative, resolve as pathResolve } from "node:path";
-import { appendEvent, archiveContent, entriesHash, foldState, readRows, sha256, type AppendResult } from "./lib/CortexLedgerCore";
+import { basename, dirname, relative, resolve as pathResolve } from "node:path";
+import { appendEvent, archiveContent, entriesHash, foldState, readRows, rowFile, sha256, type AppendResult } from "./lib/CortexLedgerCore";
 import { isInstructionShaped } from "./InjectionShapes";
 import { assertInsideUserData } from "./lib/ForeignDataCheck";
 import { ANNOTATION_PATTERN, recordWrite } from "./MemoryEntryMeta";
@@ -582,20 +582,21 @@ const SNAPSHOT_DIR_MODE = 0o700;
 
 /** Narrow `p` to `want` when it is wider; never widens. */
 function tightenMode(p: string, want: number): void {
+  if (!HAS_POSIX_MODES) return; // Windows: no mode bits to narrow
   const st = statSync(p);
   if ((st.mode & 0o777 & ~want) !== 0) chmodSync(p, st.mode & 0o777 & want);
 }
 
 function snapshotBeforeWrite(absPath: string, priorContent: string): void {
   try {
-    const base = absPath.split("/").pop()!.replace(/\.md$/, "");
+    const base = basename(absPath).replace(/\.md$/, ""); // basename, not split("/"): Windows paths use backslashes
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
     const target = pathResolve(SNAPSHOT_DIR, `${base}__${stamp}.md`);
     invariant(dirname(target) === SNAPSHOT_DIR && base.length > 0, `snapshot target ${target} must sit directly in ${SNAPSHOT_DIR}`);
     // A ring created by an older build (0755 / 0644) is tightened before the new copy lands in it.
     if (existsSync(SNAPSHOT_DIR)) tightenMode(SNAPSHOT_DIR, SNAPSHOT_DIR_MODE);
     boundaryAtomicWrite(target, priorContent, { mode: SNAPSHOT_FILE_MODE, dirMode: SNAPSHOT_DIR_MODE });
-    invariant((statSync(SNAPSHOT_DIR).mode & 0o777 & ~SNAPSHOT_DIR_MODE) === 0, `snapshot dir ${SNAPSHOT_DIR} is wider than 0700`);
+    invariant(!HAS_POSIX_MODES || (statSync(SNAPSHOT_DIR).mode & 0o777 & ~SNAPSHOT_DIR_MODE) === 0, `snapshot dir ${SNAPSHOT_DIR} is wider than 0700`);
     // Trim the ring: keep the newest SNAPSHOT_RING per base file; tighten the survivors.
     const mine = readdirSync(SNAPSHOT_DIR)
       .filter((f: string) => f.startsWith(`${base}__`))
@@ -685,7 +686,7 @@ function logRejectedWrite(
     appendEvent({
       kind: "memory/rejected",
       ts: new Date().toISOString(),
-      file: filePath.replace(CLAUDE_ROOT + "/", ""),
+      file: claudeRel(filePath),
       updated_by: options.updatedBy ?? "unknown",
       ...(options.sessionId ? { session_id: options.sessionId } : {}),
       ...(options.runId ? { run_id: options.runId } : {}),
@@ -751,7 +752,7 @@ function ledgerHeadTs(rel: string): string | null {
   for (const row of readRows()) {
     const covers = row.kind === "checkpoint"
       ? Boolean((row.files as Record<string, string> | undefined)?.[rel])
-      : row.file === rel && typeof row.content === "string";
+      : rowFile(row) === rel && typeof row.content === "string";
     if (covers) ts = row.ts;
   }
   return ts;
@@ -863,7 +864,7 @@ export function adoptLive(filePath: string, opts: { updatedBy: string; sessionId
   if (!existsSync(abs)) return { ok: false, code: "EINVAL_PATH", message: `Memory file does not exist: ${abs}` };
   const result = withLock(abs, (): AdoptResult => {
     const content = readFileSync(abs, "utf8");
-    const rel = abs.replace(CLAUDE_ROOT + "/", "");
+    const rel = claudeRel(abs);
     const drift = inspectDrift(rel, content, parseMemoryContent(content).entries);
     if (drift === null) return { ok: true, adopted: false, file: rel };
     if (drift.invalid.length > 0) {
@@ -962,7 +963,7 @@ export function setEntries(
     const parsed = parseMemoryContent(content);
     const priorEntries = parsed.entries;
     const newEntries = validated.accepted;
-    const rel = abs.replace(CLAUDE_ROOT + "/", "");
+    const rel = claudeRel(abs);
 
     // Drift check (curated ⟺ folded): when an out-of-band writer changed the
     // entries region, adopt that edit as a ledger event first, so the guards
@@ -1182,7 +1183,7 @@ export function restoreContent(
   const abs = pathCheck.abs;
 
   const result = withLock(abs, () => {
-    const rel = abs.replace(CLAUDE_ROOT + "/", "");
+    const rel = claudeRel(abs);
     // A restore is recovery, not curation, but recovery content predating a redaction must not resurrect it.
     const tombstoned = tombstonedIn(parseMemoryContent(content).entries);
     if (tombstoned.length > 0) return redactedRefusal(tombstoned, "restore content");
