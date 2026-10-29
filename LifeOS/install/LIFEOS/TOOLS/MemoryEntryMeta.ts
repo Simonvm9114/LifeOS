@@ -63,7 +63,7 @@ import { dirname, resolve as pathResolve } from "node:path";
 import { getClaudeDir } from "./Paths"; // public issue #1665 @rogdex24, #1584 @ramazanpolat — aliased resolve sites missed by the 09-03 sweep
 
 import { invariant } from "./Invariant";
-import type { LedgerRowBase } from "./lib/CortexLedgerCore";
+import { rowFile, type LedgerRowBase } from "./lib/CortexLedgerCore";
 
 const CLAUDE_ROOT = getClaudeDir();
 
@@ -265,7 +265,7 @@ export function backfillFromLedger(rows: LedgerRowBase[], options: MetaOptions =
   for (const row of rows) {
     const kind = (row as { kind?: string }).kind;
     if (kind !== "memory/set" && kind !== "memory/restore") continue;
-    const rel = (row as { file?: string }).file;
+    const rel = rowFile(row as { file?: unknown });
     const entries = (row as { entries?: string[] }).entries;
     const ts = (row as { ts?: string }).ts;
     if (typeof rel !== "string" || !Array.isArray(entries) || typeof ts !== "string") continue;

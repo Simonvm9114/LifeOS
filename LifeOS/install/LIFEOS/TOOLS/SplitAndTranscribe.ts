@@ -12,6 +12,7 @@ import { chmodSync, lstatSync, mkdtempSync, rmSync, readdirSync, statSync } from
 import { tmpdir } from "os";
 import { join, extname } from "path";
 import { invariant } from "./Invariant";
+import { HAS_POSIX_MODES } from "./Paths";
 import OpenAI from "openai";
 import { createReadStream } from "fs";
 import { writeFile } from "fs/promises";
@@ -29,8 +30,7 @@ interface ChunkInfo {
 export function makeChunkDir(base: string = tmpdir()): string {
   const dir = mkdtempSync(join(base, "transcript-"));
   chmodSync(dir, 0o700);
-  // Windows has no POSIX mode bits (stat always reports 0666); mkdtemp under the user's own temp dir is private there.
-  invariant(process.platform === "win32" || (lstatSync(dir).mode & 0o777) === 0o700, `chunk dir ${dir} is not owner-only`);
+  invariant(!HAS_POSIX_MODES || (lstatSync(dir).mode & 0o777) === 0o700, `chunk dir ${dir} is not owner-only`);
   return dir;
 }
 

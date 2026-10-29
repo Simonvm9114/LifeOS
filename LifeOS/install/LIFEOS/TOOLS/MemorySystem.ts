@@ -55,7 +55,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { getClaudeDir } from "./Paths"; // public issue #1665 @rogdex24, #1584 @ramazanpolat — aliased resolve sites missed by the 09-03 sweep
+import { claudeRel, getClaudeDir } from "./Paths"; // public issue #1665 @rogdex24, #1584 @ramazanpolat — aliased resolve sites missed by the 09-03 sweep
 import { basename, dirname, resolve as pathResolve, join as pathJoin, sep as pathSep } from "node:path";
 import { homedir, hostname, tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
@@ -81,7 +81,7 @@ import {
   type RelatedLink,
 } from "./MemoryTypes";
 
-import { setEntries as memoryWriterSetEntries, read as memoryWriterRead, claudeRel } from "./MemoryWriter";
+import { setEntries as memoryWriterSetEntries, read as memoryWriterRead } from "./MemoryWriter";
 import { classifyScope } from "./ProposalScope";
 import { addUpgrade } from "./Upgrades";
 import { getTier } from "./MutationTier";

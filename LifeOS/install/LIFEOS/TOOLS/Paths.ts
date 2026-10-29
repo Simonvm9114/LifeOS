@@ -21,7 +21,7 @@
 
 import { existsSync, mkdtempSync, realpathSync } from 'fs';
 import { homedir, tmpdir, userInfo } from 'os';
-import { dirname, join, sep } from 'path';
+import { dirname, isAbsolute, join, relative, sep } from 'path';
 
 /** expandPath against an explicit home directory, for callers that must not read the process's own. */
 export function expandPathFrom(path: string, home: string): string {
@@ -216,4 +216,24 @@ export function getSkillsDir(): string {
  */
 export function getMemoryDir(): string {
   return lifeosPath('MEMORY');
+}
+
+/**
+ * Whether this filesystem has POSIX mode bits. NTFS does not: stat reports 0666 (0444 when
+ * read-only) whatever chmod set, so owner-only checks can never pass on Windows. Every such
+ * check goes through this one flag, so a new one is easy to find and keep Windows-safe.
+ */
+export const HAS_POSIX_MODES = process.platform !== 'win32';
+
+/**
+ * Ledger key for a path under the Claude home: root-relative with forward slashes, the shape the
+ * Cortex fold and `CortexLedger verify` compare against. path.relative copes with mixed separators
+ * and drive-letter case; a plain prefix strip left absolute Windows paths in ledger rows.
+ * Paths outside the root stay as given.
+ */
+export function claudeRel(abs: string, root: string = getClaudeDir()): string {
+  if (!isAbsolute(abs)) return abs; // already a key; relative() would resolve it against the cwd
+  const rel = relative(root, abs);
+  if (!rel || rel === '..' || rel.startsWith('..' + sep) || isAbsolute(rel)) return abs;
+  return rel.split(sep).join('/');
 }

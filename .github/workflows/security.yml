@@ -33,6 +33,8 @@ jobs:
           GITLEAKS_VERSION: "8.28.0"
           # Required since gitleaks-action v2 to scan pull_request events.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A leak fails the job and shows in its log; PR comments would need pull-requests: write.
+          GITLEAKS_ENABLE_COMMENTS: "false"
 
   sensitive-content:
     name: Sensitive-content scan
