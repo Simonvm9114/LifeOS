@@ -1,44 +1,54 @@
 name: Claude Code Review
 
+# Claude reviews each new PR with the code-review plugin, paid from the owner's Claude plan
+# (repo secret CLAUDE_CODE_OAUTH_TOKEN). Not on every push: fix-up pushes would spend plan usage on
+# the same change. A second round, after large fixes only, is dispatched with the PR number.
+# Re-running the first run does not work: the plugin skips a PR Claude already commented on, unless
+# the prompt says otherwise. The plugin comes unpinned from Anthropic's marketplace (its main branch);
+# nothing here can pin it. Accepted risk: it only reads code and posts comments. Not a merge gate.
 on:
   pull_request:
-    types: [opened, synchronize, ready_for_review, reopened]
-    # Optional: Only run on specific file changes
-    # paths:
-    #   - "src/**/*.ts"
-    #   - "src/**/*.tsx"
-    #   - "src/**/*.js"
-    #   - "src/**/*.jsx"
+    types: [opened, ready_for_review, reopened]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Number of the pull request to review again
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: true
 
 jobs:
   claude-review:
-    # Optional: Filter by PR author
-    # if: |
-    #   github.event.pull_request.user.login == 'external-contributor' ||
-    #   github.event.pull_request.user.login == 'new-developer' ||
-    #   github.event.pull_request.author_association == 'FIRST_TIME_CONTRIBUTOR'
-
+    name: Claude review
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    # Posting comments needs write on pull requests; id-token is how the action gets its GitHub App token.
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
       issues: read
       id-token: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Run Claude Code Review
-        id: claude-review
-        uses: anthropics/claude-code-action@v1
+      - uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          plugin_marketplaces: 'https://github.com/anthropics/claude-code.git'
-          plugins: 'code-review@claude-code-plugins'
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
-          # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
-          # or https://code.claude.com/docs/en/cli-reference for available options
-
+          plugin_marketplaces: "https://github.com/anthropics/claude-plugins-official.git"
+          plugins: "code-review@claude-plugins-official"
+          # The action only installs the inline-comment tool when it is allowed here, and only with PR
+          # context: a dispatched second round can post a summary comment (gh pr comment), not inline ones.
+          claude_args: >-
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
+          # --comment makes the plugin post on the PR; without it the findings stay in the job log.
+          prompt: >-
+            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number || inputs.pr }} --comment
+            ${{ github.event_name == 'workflow_dispatch' && 'This is a second round the owner asked for after fixes: do not stop because Claude has already commented on this pull request. Review the current diff and comment only on issues not already raised. Inline comments are not available in this run: post all findings together in one `gh pr comment`.' || '' }}
